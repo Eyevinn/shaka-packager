@@ -23,6 +23,8 @@ constexpr const char* kRegionTeletextPrefix = "ttx_";
 const uint8_t EBU_TELETEXT_WITH_SUBTITLING = 0x03;
 const int kPayloadSize = 40;
 const int kNumTriplets = 13;
+const int64_t maxTimeBetweenSampleGeneration = 45000;  // 0.5s
+const int64_t maxTimeBetweenPTS = 450000;              // 5s
 
 template <typename T>
 constexpr T bit(T value, const size_t bit_pos) {
@@ -110,7 +112,8 @@ EsParserTeletext::EsParserTeletext(const uint32_t pid,
       page_number_(0),
       charset_code_(0),
       current_charset_{},
-      last_pts_(0) {
+      last_pts_(-1),
+      inside_sample_(false) {
   if (!ParseSubtitlingDescriptor(descriptor, descriptor_length, languages_)) {
     LOG(ERROR) << "Unable to parse teletext_descriptor";
   }
@@ -155,6 +158,7 @@ void EsParserTeletext::Reset() {
   page_number_ = 0;
   sent_info_ = false;
   charset_code_ = 0;
+  inside_sample_ = false;
   UpdateCharset();
 }
 
@@ -164,6 +168,11 @@ bool EsParserTeletext::ParseInternal(const uint8_t* data,
   BitReader reader(data, size);
   RCHECK(reader.SkipBits(8));
   std::vector<TextRow> rows;
+
+  if (last_pts_ >= 0 && pts - last_pts_ > maxTimeBetweenPTS) {
+    LOG(WARNING) << "Late sample generation due to big pts diff: "
+                 << pts - last_pts_;
+  }
 
   while (reader.bits_available()) {
     uint8_t data_unit_id;
@@ -182,7 +191,6 @@ bool EsParserTeletext::ParseInternal(const uint8_t* data,
       LOG(ERROR) << "Bad Teletext data length";
       break;
     }
-
 
     RCHECK(reader.SkipBits(16));
 
@@ -210,13 +218,13 @@ bool EsParserTeletext::ParseInternal(const uint8_t* data,
   }
 
   if (rows.empty()) {
+    SendHeartBeatSample(pts);
     return true;
   }
   const uint16_t index = magazine_ * 100 + page_number_;
   auto page_state_itr = page_state_.find(index);
   if (page_state_itr == page_state_.end()) {
     page_state_.emplace(index, TextBlock{std::move(rows), {}, last_pts_});
-
   } else {
     for (auto& row : rows) {
       auto& page_state_lines = page_state_itr->second.rows;
@@ -225,6 +233,7 @@ bool EsParserTeletext::ParseInternal(const uint8_t* data,
     rows.clear();
   }
 
+  SendHeartBeatSample(pts);
   return true;
 }
 
@@ -234,7 +243,6 @@ bool EsParserTeletext::ParseDataBlock(const int64_t pts,
                                       const uint8_t magazine,
                                       TextRow& row) {
   if (packet_nr == 0) {
-    last_pts_ = pts;
     BitReader reader(data_block, 32);
 
     const uint8_t page_number_units = ReadHamming(reader);
@@ -244,8 +252,11 @@ bool EsParserTeletext::ParseDataBlock(const int64_t pts,
       return false;
     }
     const uint8_t page_number = 10 * page_number_tens + page_number_units;
-
     const uint16_t index = magazine * 100 + page_number;
+
+    last_pts_ = pts;  // This should ideally be done for each index.
+    inside_sample_ = false;
+
     SendPending(index, pts);
 
     page_number_ = page_number;
@@ -268,9 +279,24 @@ bool EsParserTeletext::ParseDataBlock(const int64_t pts,
   } else if (packet_nr > 26) {
     return false;
   }
-
+  inside_sample_ = true;
+  ResetPTS(pts);
   row = BuildRow(data_block, packet_nr);
   return true;
+}
+
+// Update pts if no rows have been added yet.
+void EsParserTeletext::ResetPTS(int64_t pts) {
+  const uint16_t index = magazine_ * 100 + page_number_;
+  const auto page_state_itr = page_state_.find(index);
+  if (page_state_itr != page_state_.cend()) {
+    if (page_state_itr->second.rows.empty()) {
+      const auto old_pts = page_state_itr->second.pts;
+      if (pts != old_pts) {
+        page_state_itr->second.pts = pts;
+      }
+    }
+  }
 }
 
 void EsParserTeletext::UpdateCharset() {
@@ -312,8 +338,12 @@ void EsParserTeletext::UpdateCharset() {
 void EsParserTeletext::SendPending(const uint16_t index, const int64_t pts) {
   auto page_state_itr = page_state_.find(index);
 
-  if (page_state_itr == page_state_.end() ||
-      page_state_itr->second.rows.empty()) {
+  if (page_state_itr == page_state_.end()) {
+    return;
+  }
+
+  if (page_state_itr->second.rows.empty()) {
+    page_state_.erase(index);
     return;
   }
 
@@ -336,6 +366,7 @@ void EsParserTeletext::SendPending(const uint16_t index, const int64_t pts) {
     text_sample->set_sub_stream_index(index);
     emit_sample_cb_(text_sample);
     page_state_.erase(index);
+    inside_sample_ = false;
     return;
   } else {
     int32_t latest_row_nr = -1;
@@ -381,6 +412,26 @@ void EsParserTeletext::SendPending(const uint16_t index, const int64_t pts) {
   emit_sample_cb_(text_sample);
 
   page_state_.erase(index);
+  inside_sample_ = false;
+}
+
+// SendHeartBeatSample emits an empty sample if too much time has passed.
+void EsParserTeletext::SendHeartBeatSample(const int64_t pts) {
+  if (last_pts_ == -1) {
+    last_pts_ = pts;
+    return;
+  }
+  int64_t timestamp_diff = pts - last_pts_;
+  if (inside_sample_) {
+    return;
+  }
+  if (timestamp_diff >= maxTimeBetweenSampleGeneration) {
+    TextSettings text_settings;
+    auto text_sample = std::make_shared<TextSample>("", pts, pts, text_settings,
+                                                    TextFragment({}, ""));
+    emit_sample_cb_(text_sample);
+    last_pts_ = pts;
+  }
 }
 
 // BuildRow builds a row with alignment information.
@@ -461,7 +512,6 @@ EsParserTeletext::TextRow EsParserTeletext::BuildRow(const uint8_t* data_block,
         case 0xb:  // Start Box, typically twice due to double height
           start_pos = i + 1;
           continue;  // Do not propagate as a space
-          break;
         case 0xc:  // Normal size
           break;
         case 0xd:  // Double height, typically always used
