@@ -75,6 +75,13 @@ Status TextChunker::OnCueEvent(std::shared_ptr<const CueEvent> event) {
 Status TextChunker::OnTextSample(std::shared_ptr<const TextSample> sample) {
   // Output all segments that come before our new sample.
   const int64_t sample_start = sample->start_time();
+  const int64_t sample_dur = sample->duration();
+
+  if (sample_dur > 6* time_scale_) {
+    LOG(WARNING) << "Very long text sample. Dur=" << sample_dur << " timescale=" << time_scale_;
+  }
+
+  LOG(INFO) << "OnTextSample start=" << sample->start_time() << " dur=" << sample->duration();
 
   // If we have not seen a sample yet, base all segments off the first sample's
   // start time.
@@ -95,7 +102,7 @@ Status TextChunker::OnTextSample(std::shared_ptr<const TextSample> sample) {
   if (sample->duration() > 0) {
     samples_in_current_segment_.push_back(std::move(sample));
   } else {
-    sample.reset();
+    sample.reset();  // Free sample
   }
 
   return Status::OK;
@@ -106,6 +113,7 @@ Status TextChunker::DispatchSegment(int64_t duration) {
 
   // Output all the samples that are part of the segment.
   for (const auto& sample : samples_in_current_segment_) {
+    LOG(WARNING) << "DispatchSegmentLoop, pts=" << sample->start_time() << " dur=" << sample->duration();
     RETURN_IF_ERROR(DispatchTextSample(kStreamIndex, sample));
   }
 
