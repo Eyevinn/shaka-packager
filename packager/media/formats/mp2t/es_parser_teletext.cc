@@ -250,9 +250,10 @@ bool EsParserTeletext::ParseDataBlock(const int64_t pts,
       RCHECK(reader.SkipBits(40));
       return false;
     }
+    inside_sample = false;
     const uint8_t page_number = 10 * page_number_tens + page_number_units;
-
     const uint16_t index = magazine * 100 + page_number;
+
     SendPending(index, pts);
 
     page_number_ = page_number;
@@ -402,13 +403,16 @@ void EsParserTeletext::SendHeartBeatSample(const int64_t pts) {
     last_sample_end_pts_ = pts;
     return;
   }
+  int64_t timestamp_diff = pts - last_sample_end_pts_;
   if (inside_sample) {
+    //LOG(INFO) << "inside sample, time_diff=" << timestamp_diff;
     return;
   }
-  if (pts - last_sample_end_pts_ >= maxTimeBetweenSampleGeneration) {
+  if (timestamp_diff >= maxTimeBetweenSampleGeneration) {
     TextSettings text_settings;
     auto text_sample = std::make_shared<TextSample>("", pts, pts, text_settings,
                                                     TextFragment({}, ""));
+    //LOG(INFO) << "empty sample, time_diff=" << timestamp_diff << " pts=" << text_sample->start_time();
     emit_sample_cb_(text_sample);
     last_sample_end_pts_ = pts;
   }
