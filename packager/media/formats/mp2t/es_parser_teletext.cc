@@ -341,10 +341,15 @@ void EsParserTeletext::UpdateCharset() {
 void EsParserTeletext::SendPending(const uint16_t index, const int64_t pts) {
   auto page_state_itr = page_state_.find(index);
 
-  if (page_state_itr == page_state_.end() ||
-      page_state_itr->second.rows.empty()) {
+  if (page_state_itr == page_state_.end()) {
     return;
   }
+
+  if (page_state_itr->second.rows.empty()) {
+    page_state_.erase(index);
+    return;
+  }
+
 
   const auto& pending_rows = page_state_itr->second.rows;
   const auto pending_pts = page_state_itr->second.pts;
