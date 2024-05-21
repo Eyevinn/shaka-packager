@@ -111,8 +111,7 @@ EsParserTeletext::EsParserTeletext(const uint32_t pid,
       page_number_(0),
       charset_code_(0),
       current_charset_{},
-      last_pts_(0),
-      last_sample_end_pts_(-1),
+      last_pts_(-1),
       inside_sample(false) {
   if (!ParseSubtitlingDescriptor(descriptor, descriptor_length, languages_)) {
     LOG(ERROR) << "Unable to parse teletext_descriptor";
@@ -120,6 +119,7 @@ EsParserTeletext::EsParserTeletext(const uint32_t pid,
   UpdateCharset();
 }
 
+// Return value ends up for "emitting PES packet in PES parser
 bool EsParserTeletext::Parse(const uint8_t* buf,
                              int size,
                              int64_t pts,
@@ -159,8 +159,11 @@ void EsParserTeletext::Reset() {
   sent_info_ = false;
   charset_code_ = 0;
   inside_sample = false;
-  last_sample_end_pts_ = -1;
   UpdateCharset();
+}
+
+bool skipData(const int64_t pts) {
+  return (0 < pts && pts < 100);
 }
 
 bool EsParserTeletext::ParseInternal(const uint8_t* data,
@@ -170,7 +173,7 @@ bool EsParserTeletext::ParseInternal(const uint8_t* data,
   RCHECK(reader.SkipBits(8));
   std::vector<TextRow> rows;
 
-  while (reader.bits_available()) {
+  while (reader.bits_available() && !skipData(pts)) {
     uint8_t data_unit_id;
     RCHECK(reader.ReadBits(8, &data_unit_id));
 
@@ -187,7 +190,6 @@ bool EsParserTeletext::ParseInternal(const uint8_t* data,
       LOG(ERROR) << "Bad Teletext data length";
       break;
     }
-
 
     RCHECK(reader.SkipBits(16));
 
@@ -210,6 +212,7 @@ bool EsParserTeletext::ParseInternal(const uint8_t* data,
 
     TextRow row;
     if (ParseDataBlock(pts, data_block, packet_nr, magazine, row)) {
+      LOG(INFO) << "pts=" << pts << " row=" << row.row_number << " text=" << row.fragment.body;
       rows.emplace_back(std::move(row));
     }
   }
@@ -220,7 +223,7 @@ bool EsParserTeletext::ParseInternal(const uint8_t* data,
   }
   const uint16_t index = magazine_ * 100 + page_number_;
   auto page_state_itr = page_state_.find(index);
-  if (page_state_itr == page_state_.end()) {
+  if (page_state_itr == page_state_.end()) { //TOBBE. index does not exist. Start new.
     page_state_.emplace(index, TextBlock{std::move(rows), {}, last_pts_});
 
   } else {
@@ -241,7 +244,6 @@ bool EsParserTeletext::ParseDataBlock(const int64_t pts,
                                       const uint8_t magazine,
                                       TextRow& row) {
   if (packet_nr == 0) {
-    last_pts_ = pts;
     BitReader reader(data_block, 32);
 
     const uint8_t page_number_units = ReadHamming(reader);
@@ -250,9 +252,11 @@ bool EsParserTeletext::ParseDataBlock(const int64_t pts,
       RCHECK(reader.SkipBits(40));
       return false;
     }
-    inside_sample = false;
     const uint8_t page_number = 10 * page_number_tens + page_number_units;
     const uint16_t index = magazine * 100 + page_number;
+    last_pts_ = pts;  // This should ideally be done for each index.
+    inside_sample = false;
+    LOG(INFO) << "packet_nr==0, index=" << index << " last_pts_=pts=" << pts;
 
     SendPending(index, pts);
 
@@ -327,6 +331,7 @@ void EsParserTeletext::SendPending(const uint16_t index, const int64_t pts) {
 
   const auto& pending_rows = page_state_itr->second.rows;
   const auto pending_pts = page_state_itr->second.pts;
+  LOG(INFO) << "send pending_pts=" << pending_pts << " pts=" << pts;
 
   TextSettings text_settings;
   std::shared_ptr<TextSample> text_sample;
@@ -342,7 +347,6 @@ void EsParserTeletext::SendPending(const uint16_t index, const int64_t pts) {
     text_sample = std::make_shared<TextSample>(
         "", pending_pts, pts, text_settings, pending_rows[0].fragment);
     text_sample->set_sub_stream_index(index);
-    last_sample_end_pts_ = text_sample->EndTime();
     emit_sample_cb_(text_sample);
     page_state_.erase(index);
     inside_sample = false;
@@ -362,7 +366,6 @@ void EsParserTeletext::SendPending(const uint16_t index, const int64_t pts) {
               std::make_shared<TextSample>("", pending_pts, pts, text_settings,
                                            TextFragment({}, sub_fragments));
           text_sample->set_sub_stream_index(index);
-          last_sample_end_pts_ = text_sample->EndTime();
           emit_sample_cb_(text_sample);
           new_sample = true;
         } else {
@@ -389,7 +392,6 @@ void EsParserTeletext::SendPending(const uint16_t index, const int64_t pts) {
   text_sample = std::make_shared<TextSample>(
       "", pending_pts, pts, text_settings, TextFragment({}, sub_fragments));
   text_sample->set_sub_stream_index(index);
-  last_sample_end_pts_ = text_sample->EndTime();
   emit_sample_cb_(text_sample);
 
   page_state_.erase(index);
@@ -397,13 +399,13 @@ void EsParserTeletext::SendPending(const uint16_t index, const int64_t pts) {
 }
 
 
-// SendHaeatBeatSample emits an empty sample if too much time has passed.
+// SendHeartBeatSample emits an empty sample if too much time has passed.
 void EsParserTeletext::SendHeartBeatSample(const int64_t pts) {
-  if (last_sample_end_pts_ == -1) {
-    last_sample_end_pts_ = pts;
+  if (last_pts_ == -1) {
+    last_pts_ = pts;
     return;
   }
-  int64_t timestamp_diff = pts - last_sample_end_pts_;
+  int64_t timestamp_diff = pts - last_pts_;
   if (inside_sample) {
     //LOG(INFO) << "inside sample, time_diff=" << timestamp_diff;
     return;
@@ -414,7 +416,7 @@ void EsParserTeletext::SendHeartBeatSample(const int64_t pts) {
                                                     TextFragment({}, ""));
     //LOG(INFO) << "empty sample, time_diff=" << timestamp_diff << " pts=" << text_sample->start_time();
     emit_sample_cb_(text_sample);
-    last_sample_end_pts_ = pts;
+    last_pts_ = pts;
   }
 }
 

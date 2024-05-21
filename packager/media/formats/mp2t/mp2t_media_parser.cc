@@ -194,7 +194,6 @@ bool Mp2tMediaParser::Flush() {
 }
 
 bool Mp2tMediaParser::Parse(const uint8_t* buf, int size) {
-  DVLOG(2) << "Mp2tMediaParser::Parse size=" << size;
 
   // Add the data to the parser state.
   ts_byte_queue_.Push(buf, size);
@@ -452,7 +451,7 @@ void Mp2tMediaParser::OnEmitMediaSample(
 void Mp2tMediaParser::OnEmitTextSample(uint32_t pes_pid,
                                        std::shared_ptr<TextSample> new_sample) {
   DCHECK(new_sample);
-  DVLOG(LOG_LEVEL_ES) << "OnEmitTextSample: "
+  LOG(INFO) << "OnEmitTextSample: "
                       << " pid=" << pes_pid
                       << " start=" << new_sample->start_time();
 
@@ -467,7 +466,6 @@ void Mp2tMediaParser::OnEmitTextSample(uint32_t pes_pid,
 }
 
 bool Mp2tMediaParser::EmitRemainingSamples() {
-  DVLOG(LOG_LEVEL_ES) << "Mp2tMediaParser::EmitRemainingBuffers";
 
   // No buffer should be sent until fully initialized.
   if (!is_initialized_)
@@ -481,6 +479,7 @@ bool Mp2tMediaParser::EmitRemainingSamples() {
     pid_pair.second->media_sample_queue_.clear();
 
     for (auto sample : pid_pair.second->text_sample_queue_) {
+      LOG(INFO) << "EmitRemainingSample start_time=" << sample->start_time();
       RCHECK(new_text_sample_cb_(pid_pair.first, sample));
     }
     pid_pair.second->text_sample_queue_.clear();

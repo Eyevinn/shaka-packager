@@ -78,10 +78,15 @@ Status TextChunker::OnTextSample(std::shared_ptr<const TextSample> sample) {
   const int64_t sample_dur = sample->duration();
 
   if (sample_dur > 6* time_scale_) {
-    LOG(WARNING) << "Very long text sample. Dur=" << sample_dur << " timescale=" << time_scale_;
+    LOG(WARNING) << "Very long text sample. start=" << sample_start << " dur=" << sample_dur << " timescale=" << time_scale_;
+    LOG(INFO) << "body=" << sample->body().body;
   }
 
-  LOG(INFO) << "OnTextSample start=" << sample->start_time() << " dur=" << sample->duration();
+  if (sample->duration() == 0) {
+    LOG(INFO) << "OnTextSample HeartBeat=" << sample->start_time();
+  } else {
+    LOG(INFO) << "OnTextSample start=" << sample->start_time() << " end=" << sample->start_time() + sample->duration();
+  }
 
   // If we have not seen a sample yet, base all segments off the first sample's
   // start time.
@@ -90,6 +95,7 @@ Status TextChunker::OnTextSample(std::shared_ptr<const TextSample> sample) {
     // before the sample. This should allow segments from different streams to
     // align.
     segment_start_ = (sample_start / segment_duration_) * segment_duration_;
+    LOG(INFO) << "first segment start=" << segment_start_;
   }
 
   // We need to write all the segments that would have ended before the new
@@ -113,7 +119,7 @@ Status TextChunker::DispatchSegment(int64_t duration) {
 
   // Output all the samples that are part of the segment.
   for (const auto& sample : samples_in_current_segment_) {
-    LOG(WARNING) << "DispatchSegmentLoop, pts=" << sample->start_time() << " dur=" << sample->duration();
+    LOG(WARNING) << "DispatchTextSample, pts=" << sample->start_time() << " end=" << sample->EndTime();
     RETURN_IF_ERROR(DispatchTextSample(kStreamIndex, sample));
   }
 
@@ -123,11 +129,13 @@ Status TextChunker::DispatchSegment(int64_t duration) {
   info->duration = duration;
   info->segment_number = segment_number_++;
 
+  LOG(INFO) << "DispatchSegmentInfo nr=" << info->segment_number << " start=" << segment_start_ << " end=" << segment_start_ + duration;
   RETURN_IF_ERROR(DispatchSegmentInfo(kStreamIndex, std::move(info)));
 
   // Move onto the next segment.
   const int64_t new_segment_start = segment_start_ + duration;
   segment_start_ = new_segment_start;
+  LOG(INFO) << "New segment start=" << segment_start_ << " end=" << segment_start_ + duration;
 
   // Remove all samples that end before the (new) current segment started.
   samples_in_current_segment_.remove_if(
@@ -135,6 +143,8 @@ Status TextChunker::DispatchSegment(int64_t duration) {
         // For the sample to even be in this list, it should have started
         // before the (new) current segment.
         DCHECK_LT(sample->start_time(), new_segment_start);
+        auto should_remove = sample->EndTime() <= new_segment_start;
+        LOG(INFO) << "sample start=" << sample->start_time() << " end=" << sample->EndTime() << " remove=" << should_remove;
         return sample->EndTime() <= new_segment_start;
       });
 
