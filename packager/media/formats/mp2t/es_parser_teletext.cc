@@ -224,11 +224,12 @@ bool EsParserTeletext::ParseInternal(const uint8_t* data,
   const uint16_t index = magazine_ * 100 + page_number_;
   auto page_state_itr = page_state_.find(index);
   if (page_state_itr == page_state_.end()) { //TOBBE. index does not exist. Start new.
+    LOG(INFO) << "page_state start pts=" << last_pts_ << " nr_rows=" << rows.size();
     page_state_.emplace(index, TextBlock{std::move(rows), {}, last_pts_});
-
   } else {
     for (auto& row : rows) {
       auto& page_state_lines = page_state_itr->second.rows;
+      LOG(INFO) << "page_state adding row=" << row.row_number << " to pts=" << page_state_itr->second.pts;
       page_state_lines.emplace_back(std::move(row));
     }
     rows.clear();
@@ -254,9 +255,11 @@ bool EsParserTeletext::ParseDataBlock(const int64_t pts,
     }
     const uint8_t page_number = 10 * page_number_tens + page_number_units;
     const uint16_t index = magazine * 100 + page_number;
+    if (pts != last_pts_) {
+      LOG(INFO) << "packet_nr=0, index=" << index << " last_pts_=pts=" << pts;
+    }
     last_pts_ = pts;  // This should ideally be done for each index.
     inside_sample = false;
-    LOG(INFO) << "packet_nr==0, index=" << index << " last_pts_=pts=" << pts;
 
     SendPending(index, pts);
 
@@ -281,6 +284,20 @@ bool EsParserTeletext::ParseDataBlock(const int64_t pts,
     return false;
   }
   inside_sample = true;
+  const uint16_t index = magazine_ * 100 + page_number_;
+  LOG(INFO) << "packet_nr=" << packet_nr << " index=" << index;
+  const auto page_state_itr = page_state_.find(index);
+  if (page_state_itr != page_state_.cend()) {
+    if (page_state_itr->second.rows.empty()) {
+      const auto old_pts = page_state_itr->second.pts;
+      if (pts != old_pts) {
+        const auto oldTB = page_state_itr->second;
+        page_state_.erase(index);
+        page_state_.emplace(index, TextBlock{{}, oldTB.packet_26_replacements, pts});
+        LOG(INFO) << "reset PTS from " << old_pts << " to " << pts;
+      }
+    }
+  }
   row = BuildRow(data_block, packet_nr);
   return true;
 }
@@ -349,6 +366,7 @@ void EsParserTeletext::SendPending(const uint16_t index, const int64_t pts) {
     text_sample->set_sub_stream_index(index);
     emit_sample_cb_(text_sample);
     page_state_.erase(index);
+    LOG(INFO) << "erased page_state single-row index=" << index;
     inside_sample = false;
     return;
   } else {
@@ -395,6 +413,7 @@ void EsParserTeletext::SendPending(const uint16_t index, const int64_t pts) {
   emit_sample_cb_(text_sample);
 
   page_state_.erase(index);
+  LOG(INFO) << "erased page_state multiple-rows index=" << index;
   inside_sample = false;
 }
 
@@ -559,6 +578,7 @@ void EsParserTeletext::ParsePacket26(const uint8_t* data_block) {
   const uint16_t index = magazine_ * 100 + page_number_;
   auto page_state_itr = page_state_.find(index);
   if (page_state_itr == page_state_.end()) {
+    LOG(INFO) << "packet26 create TextBlock pts=" << last_pts_;
     page_state_.emplace(index, TextBlock{{}, {}, last_pts_});
   }
   auto& replacement_map = page_state_[index].packet_26_replacements;

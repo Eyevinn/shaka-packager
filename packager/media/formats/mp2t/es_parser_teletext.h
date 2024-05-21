@@ -49,7 +49,13 @@ class EsParserTeletext : public EsParser {
     std::vector<TextRow> rows;
     RowColReplacementMap packet_26_replacements;
     int64_t pts;
+
+    void SetPTS(uint64_t new_pts) {
+      pts = new_pts;
+    }
   };
+
+
 
   bool ParseInternal(const uint8_t* data, const size_t size, const int64_t pts);
   bool ParseDataBlock(const int64_t pts,
