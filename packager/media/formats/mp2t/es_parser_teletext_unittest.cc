@@ -325,7 +325,7 @@ TEST_F(EsParserTeletextTest, multiple_lines_with_same_pts) {
   EXPECT_TRUE(parse_result);
 
   EXPECT_NE(nullptr, text_sample_.get());
-  EXPECT_EQ(8768632, text_sample_->start_time());
+  EXPECT_EQ(8773087, text_sample_->start_time());
   EXPECT_EQ(8937764, text_sample_->EndTime());
   EXPECT_EQ(3, text_sample_->body().sub_fragments.size());
   EXPECT_EQ("-Sí?", text_sample_->body().sub_fragments[0].body);

@@ -294,10 +294,8 @@ bool EsParserTeletext::ParseDataBlock(const int64_t pts,
     if (page_state_itr->second.rows.empty()) {
       const auto old_pts = page_state_itr->second.pts;
       if (pts != old_pts) {
-        const auto oldTB = page_state_itr->second;
-        page_state_.erase(index);
-        page_state_.emplace(index, TextBlock{{}, oldTB.packet_26_replacements, pts});
-        LOG(INFO) << "reset PTS from " << old_pts << " to " << pts;
+        page_state_itr->second.pts = pts;
+        LOG(INFO) << "reset PTS from " << old_pts << " to " << page_state_itr->second.pts;
       }
     }
   }
