@@ -244,6 +244,9 @@ bool EsParserTeletext::ParseDataBlock(const int64_t pts,
                                       const uint8_t packet_nr,
                                       const uint8_t magazine,
                                       TextRow& row) {
+  if (last_pts_ >= 0 && pts - last_pts_ > 5*90000) {
+    LOG(WARNING) << "Irregular sample generation due to big pts diff: " << pts - last_pts_;
+  }
   if (packet_nr == 0) {
     BitReader reader(data_block, 32);
 
@@ -422,7 +425,6 @@ void EsParserTeletext::SendPending(const uint16_t index, const int64_t pts) {
   inside_sample = false;
 }
 
-
 // SendHeartBeatSample emits an empty sample if too much time has passed.
 void EsParserTeletext::SendHeartBeatSample(const int64_t pts) {
   if (last_pts_ == -1) {
@@ -522,7 +524,6 @@ EsParserTeletext::TextRow EsParserTeletext::BuildRow(const uint8_t* data_block,
         case 0xb:  // Start Box, typically twice due to double height
           start_pos = i + 1;
           continue;  // Do not propagate as a space
-          break;
         case 0xc:  // Normal size
           break;
         case 0xd:  // Double height, typically always used
