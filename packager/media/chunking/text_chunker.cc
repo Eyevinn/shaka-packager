@@ -82,7 +82,10 @@ Status TextChunker::OnTextSample(std::shared_ptr<const TextSample> sample) {
     LOG(INFO) << "body=" << sample->body().body;
   }
 
-  if (sample->duration() == 0) {
+  auto dur = sample->duration();
+  if (dur < 0) {
+    LOG(INFO) << "Media-triggered HeartBeat=" << sample->start_time();
+  } else if (dur == 0) {
     LOG(INFO) << "OnTextSample HeartBeat=" << sample->start_time();
   } else {
     LOG(INFO) << "OnTextSample start=" << sample->start_time() << " end=" << sample->start_time() + sample->duration();

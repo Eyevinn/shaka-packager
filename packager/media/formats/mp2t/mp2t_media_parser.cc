@@ -358,6 +358,11 @@ void Mp2tMediaParser::RegisterPes(int pmt_pid,
   // Store PES metadata.
   pes_metadata_.insert(
       std::make_pair(pes_pid, PesMetadata{max_bitrate, lang, audio_type}));
+
+  // Keep track of text pids
+  if (pid_type == PidState::kPidTextPes) {
+    text_pids_.insert(pes_pid);
+  }
 }
 
 void Mp2tMediaParser::OnNewStreamInfo(
@@ -445,15 +450,13 @@ void Mp2tMediaParser::OnEmitMediaSample(
                << ").";
     return;
   }
+  update_biggest_pts(new_sample->pts());
   pid_state->second->media_sample_queue_.push_back(std::move(new_sample));
 }
 
 void Mp2tMediaParser::OnEmitTextSample(uint32_t pes_pid,
                                        std::shared_ptr<TextSample> new_sample) {
   DCHECK(new_sample);
-  LOG(INFO) << "OnEmitTextSample: "
-                      << " pid=" << pes_pid
-                      << " start=" << new_sample->start_time();
 
   // Add the sample to the appropriate PID sample queue.
   auto pid_state = pids_.find(pes_pid);
@@ -461,6 +464,16 @@ void Mp2tMediaParser::OnEmitTextSample(uint32_t pes_pid,
     LOG(ERROR) << "PID State for new sample not found (pid = "
                << pes_pid << ").";
     return;
+  }
+
+  if (new_sample->duration() >= 0) {
+    // Remove pending media-generated heart beats (duration < 0)
+    while (!pid_state->second->text_sample_queue_.empty()) {
+      if (pid_state->second->text_sample_queue_.back()->duration() >= 0) {
+        break;
+      }
+      pid_state->second->text_sample_queue_.pop_back();
+    }
   }
   pid_state->second->text_sample_queue_.push_back(std::move(new_sample));
 }
@@ -486,6 +499,25 @@ bool Mp2tMediaParser::EmitRemainingSamples() {
   }
 
   return true;
+}
+
+void Mp2tMediaParser::update_biggest_pts(int64_t pts) {
+  if (pts > biggest_pts_) {
+    biggest_pts_ = pts;
+    for (auto pid : text_pids_) {
+      auto pid_state = pids_.find(pid);
+      if (pid_state == pids_.end()) {
+        LOG(ERROR) << "PID State for new sample not found (text pid = " << pid << " )";
+        continue;
+      }
+      TextSettings text_settings;
+      // A sample with negative duration signals heart beat PTS from other media
+      auto new_pts = pts - 90000; // Delay one second to get some margin.
+      auto neg_dur_sample = std::make_shared<TextSample>("", new_pts, new_pts-1, text_settings,
+                                                TextFragment({}, ""));
+      OnEmitTextSample(uint32_t(pid), neg_dur_sample);
+    }
+  }
 }
 
 }  // namespace mp2t
