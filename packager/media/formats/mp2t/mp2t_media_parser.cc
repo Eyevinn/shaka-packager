@@ -492,7 +492,6 @@ bool Mp2tMediaParser::EmitRemainingSamples() {
     pid_pair.second->media_sample_queue_.clear();
 
     for (auto sample : pid_pair.second->text_sample_queue_) {
-      LOG(INFO) << "EmitRemainingSample start_time=" << sample->start_time();
       RCHECK(new_text_sample_cb_(pid_pair.first, sample));
     }
     pid_pair.second->text_sample_queue_.clear();
@@ -502,7 +501,7 @@ bool Mp2tMediaParser::EmitRemainingSamples() {
 }
 
 void Mp2tMediaParser::update_biggest_pts(int64_t pts) {
-  if (pts > biggest_pts_) {
+  if (pts >= biggest_pts_+9000) { // 100ms larger than last biggest
     biggest_pts_ = pts;
     for (auto pid : text_pids_) {
       auto pid_state = pids_.find(pid);

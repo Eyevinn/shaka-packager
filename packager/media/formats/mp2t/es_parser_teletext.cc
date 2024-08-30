@@ -245,7 +245,9 @@ bool EsParserTeletext::ParseDataBlock(const int64_t pts,
                                       const uint8_t magazine,
                                       TextRow& row) {
   if (last_pts_ >= 0 && pts - last_pts_ > 5*90000) {
-    LOG(WARNING) << "Irregular sample generation due to big pts diff: " << pts - last_pts_;
+    LOG(WARNING) << "Irregular sample generation due to big pts diff. pts=" <<
+      pts << " diff=" << pts - last_pts_;
+
   }
   if (packet_nr == 0) {
     BitReader reader(data_block, 32);
@@ -259,7 +261,8 @@ bool EsParserTeletext::ParseDataBlock(const int64_t pts,
     const uint8_t page_number = 10 * page_number_tens + page_number_units;
     const uint16_t index = magazine * 100 + page_number;
     if (pts != last_pts_) {
-      LOG(INFO) << "packet_nr=0, index=" << index << " last_pts_=pts=" << pts;
+      LOG(INFO) << "packet_nr=0, index=" << index << " last_pts_=" <<
+        last_pts_ << " pts=" << pts;
     }
     last_pts_ = pts;  // This should ideally be done for each index.
     inside_sample = false;
