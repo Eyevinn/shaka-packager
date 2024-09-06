@@ -51,7 +51,8 @@ StreamInfo::StreamInfo(StreamType stream_type,
       codec_(codec),
       codec_string_(codec_string),
       language_(language),
-      is_encrypted_(is_encrypted) {
+      is_encrypted_(is_encrypted),
+      heartbeat_shift_(0) {
   if (codec_config_size > 0) {
     codec_config_.assign(codec_config, codec_config + codec_config_size);
   }

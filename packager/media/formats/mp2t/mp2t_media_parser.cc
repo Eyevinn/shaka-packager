@@ -510,11 +510,8 @@ void Mp2tMediaParser::update_biggest_pts(int64_t pts) {
         continue;
       }
       TextSettings text_settings;
-      // A sample with negative duration signals heart beat PTS from other media
-      auto new_pts = pts - 5*90000; // Delay 5 seconds since the text cue must be finished to be emitted to get
-                                            // the parser. We can only decrease if we have knowledge about started
-                                            // cues, or we know that no cue is longer than e.g. 2.
-      auto neg_dur_sample = std::make_shared<TextSample>("", new_pts, new_pts-1, text_settings,
+      // A sample with duration == -1 signals heart beat PTS from other media
+      auto neg_dur_sample = std::make_shared<TextSample>("", pts, pts-1, text_settings,
                                                 TextFragment({}, ""));
       OnEmitTextSample(uint32_t(pid), neg_dur_sample);
     }

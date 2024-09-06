@@ -703,7 +703,11 @@ Status CreateAudioVideoJobs(
 
     if (stream.cc_index >= 0) {
       handlers.emplace_back(
-          std::make_shared<CcStreamFilter>(stream.language, stream.cc_index));
+          std::make_shared<CcStreamFilter>(stream.language, stream.cc_index, stream.heartbeat_shift));
+    }
+
+    if (stream.heartbeat_shift != 0 && demuxer->heartbeat_shift() == 0) {
+      demuxer->set_heartbeat_shift(stream.heartbeat_shift);
     }
 
     if (is_text &&

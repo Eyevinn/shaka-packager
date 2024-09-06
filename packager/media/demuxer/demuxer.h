@@ -79,6 +79,14 @@ class Demuxer : public OriginHandler {
     input_format_ = input_format;
   }
 
+  int32_t heartbeat_shift() {
+    return heartbeat_shift_;
+  }
+
+  void set_heartbeat_shift(int32_t heartbeat_shift) {
+    heartbeat_shift_ = heartbeat_shift;
+  }
+
  protected:
   /// @name MediaHandler implementation overrides.
   /// @{
@@ -93,6 +101,8 @@ class Demuxer : public OriginHandler {
     return true;
   }
   /// @}
+  ///
+  ///
 
  private:
   Demuxer(const Demuxer&) = delete;
@@ -154,6 +164,8 @@ class Demuxer : public OriginHandler {
   Status init_event_status_;
   // Explicitly defined input format, for avoiding autodetection.
   std::string input_format_;
+  uint32_t heartbeat_shift_;
+
 };
 
 }  // namespace media

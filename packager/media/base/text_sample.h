@@ -128,6 +128,7 @@ class TextSample {
   int64_t duration() const { return duration_; }
   const TextSettings& settings() const { return settings_; }
   const TextFragment& body() const { return body_; }
+  void shift_start_time(int64_t shift) { start_time_ += shift; };
   int64_t EndTime() const;
 
   int32_t sub_stream_index() const { return sub_stream_index_; }
@@ -139,7 +140,7 @@ class TextSample {
   // impact is minimal.
 
   const std::string id_;
-  const int64_t start_time_ = 0;
+  int64_t start_time_ = 0;
   const int64_t duration_ = 0;
   const TextSettings settings_;
   const TextFragment body_;

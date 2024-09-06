@@ -21,6 +21,7 @@ namespace media {
 /// filters out only one of them.
 class CcStreamFilter : public MediaHandler {
  public:
+  CcStreamFilter(const std::string& language, uint16_t cc_index, int32_t heartbeat_shift);
   CcStreamFilter(const std::string& language, uint16_t cc_index);
   ~CcStreamFilter() override = default;
 
@@ -31,6 +32,7 @@ class CcStreamFilter : public MediaHandler {
  private:
   const std::string language_;
   const uint16_t cc_index_;
+  const int32_t heartbeat_shift_;
 };
 
 }  // namespace media
