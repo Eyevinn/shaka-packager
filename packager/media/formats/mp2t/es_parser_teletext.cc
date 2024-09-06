@@ -373,6 +373,7 @@ void EsParserTeletext::SendPending(const uint16_t index, const int64_t pts) {
     text_sample = std::make_shared<TextSample>(
         "", pending_pts, pts, text_settings, pending_rows[0].fragment);
     text_sample->set_sub_stream_index(index);
+    LOG(INFO) << "send 1 row pending_pts=" << pending_pts << " pts=" << pts;
     emit_sample_cb_(text_sample);
     page_state_.erase(index);
     LOG(INFO) << "erased page_state single-row index=" << index;
@@ -393,6 +394,7 @@ void EsParserTeletext::SendPending(const uint16_t index, const int64_t pts) {
               std::make_shared<TextSample>("", pending_pts, pts, text_settings,
                                            TextFragment({}, sub_fragments));
           text_sample->set_sub_stream_index(index);
+          LOG(INFO) << "send non-adjacent pending_pts=" << pending_pts << " pts=" << pts;
           emit_sample_cb_(text_sample);
           new_sample = true;
         } else {
@@ -419,11 +421,28 @@ void EsParserTeletext::SendPending(const uint16_t index, const int64_t pts) {
   text_sample = std::make_shared<TextSample>(
       "", pending_pts, pts, text_settings, TextFragment({}, sub_fragments));
   text_sample->set_sub_stream_index(index);
+  LOG(INFO) << "send final pending_pts=" << pending_pts << " pts=" << pts;
   emit_sample_cb_(text_sample);
 
   page_state_.erase(index);
   LOG(INFO) << "erased page_state multiple-rows index=" << index;
   inside_sample = false;
+}
+
+// SendCueStart emits a text sample with body but zero duration
+// since the duration is not yet known
+void EsParserTeletext::SendCueStart(const int64_t pts) {
+  if (!inside_sample) {
+    // No reason to send anything
+    LOG(WARNING) << "SendCueStart called without inside_sample";
+    return;
+  }
+    TextSettings text_settings;
+    auto text_sample = std::make_shared<TextSample>("", pts, pts, text_settings,
+                                                    TextFragment({}, ""));
+    //LOG(INFO) << "empty sample, time_diff=" << timestamp_diff << " pts=" << text_sample->start_time();
+    emit_sample_cb_(text_sample);
+    last_pts_ = pts;
 }
 
 // SendHeartBeatSample emits an empty sample if too much time has passed.
@@ -434,7 +453,7 @@ void EsParserTeletext::SendHeartBeatSample(const int64_t pts) {
   }
   int64_t timestamp_diff = pts - last_pts_;
   if (inside_sample) {
-    //LOG(INFO) << "inside sample, time_diff=" << timestamp_diff;
+    LOG(INFO) << "inside sample pts=" << pts << " time_diff=" << timestamp_diff;
     return;
   }
   if (timestamp_diff >= maxTimeBetweenSampleGeneration) {
