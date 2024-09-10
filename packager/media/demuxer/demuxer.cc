@@ -341,10 +341,6 @@ bool Demuxer::NewTextSampleEvent(uint32_t track_id,
     // triggering of text segments
     sample->shift_start_time(-heartbeat_shift());
   }
-  auto start = sample->start_time();
-  auto dur = sample->duration();
-  auto end = start + dur;
-  LOG(WARNING) << "NewTextSampleEvent: start=" << start << " end=" << end << " dur=" << dur;
 
   if (!all_streams_ready_) {
     if (queued_text_samples_.size() >= kQueuedSamplesLimit) {

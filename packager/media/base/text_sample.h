@@ -115,6 +115,17 @@ struct TextFragment {
   bool is_empty() const;
 };
 
+enum class TextSampleRole {
+  /// Is Cue, but duration not yet trimmed
+  kCue,
+  /// EndTime should modify current Cue
+  kCueEnd,
+  /// Incoming PTS on text pid. Sent as start_time
+  kTextHeartBeat,
+  /// Incoming PTS on other media pid. Sent as start_time
+  kMediaHeartBeat,
+};
+
 class TextSample {
  public:
   TextSample(const std::string& id,
@@ -123,9 +134,17 @@ class TextSample {
              const TextSettings& settings,
              const TextFragment& body);
 
+  TextSample(const std::string& id,
+           int64_t start_time,
+           int64_t end_time,
+           const TextSettings& settings,
+           const TextFragment& body,
+           TextSampleRole role);
+
   const std::string& id() const { return id_; }
   int64_t start_time() const { return start_time_; }
   int64_t duration() const { return duration_; }
+  void set_duration (int64_t duration) { duration_ = duration; }
   const TextSettings& settings() const { return settings_; }
   const TextFragment& body() const { return body_; }
   void shift_start_time(int64_t shift) { start_time_ += shift; };
@@ -133,6 +152,9 @@ class TextSample {
 
   int32_t sub_stream_index() const { return sub_stream_index_; }
   void set_sub_stream_index(int32_t idx) { sub_stream_index_ = idx; }
+  bool is_empty() const { return body_.is_empty(); }
+  TextSampleRole role() const { return role_; }
+
 
  private:
   // Allow the compiler generated copy constructor and assignment operator
@@ -141,10 +163,11 @@ class TextSample {
 
   const std::string id_;
   int64_t start_time_ = 0;
-  const int64_t duration_ = 0;
+  int64_t duration_ = 0;
   const TextSettings settings_;
   const TextFragment body_;
   int32_t sub_stream_index_ = -1;
+  const TextSampleRole role_;
 };
 
 }  // namespace media

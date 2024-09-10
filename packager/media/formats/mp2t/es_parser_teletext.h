@@ -19,6 +19,8 @@ namespace shaka {
 namespace media {
 namespace mp2t {
 
+const int64_t cue_duration_placeholder = 30*90000; // 30s
+
 class EsParserTeletext : public EsParser {
  public:
   EsParserTeletext(const uint32_t pid,
@@ -68,6 +70,8 @@ class EsParserTeletext : public EsParser {
   TextRow BuildRow(const uint8_t* data_block, const uint8_t row) const;
   void ParsePacket26(const uint8_t* data_block);
   void UpdateNationalSubset(const uint8_t national_subset[13][3]);
+  void SendStartedCue(const uint16_t index);
+  void SendCueEnd(const uint16_t index, const int64_t pts);
   void SendHeartBeatSample(const int64_t pts);
 
   static void SetPacket26ReplacementString(
@@ -87,7 +91,7 @@ class EsParserTeletext : public EsParser {
   uint8_t charset_code_;
   char current_charset_[96][3];
   int64_t last_pts_;
-  bool inside_sample;
+  bool inside_sample_;
 };
 
 }  // namespace mp2t

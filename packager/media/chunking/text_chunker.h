@@ -60,7 +60,7 @@ class TextChunker : public MediaHandler {
   // All samples that make up the current segment. We must store the samples
   // until the segment ends because a cue event may end the segment sooner
   // than we expected.
-  std::list<std::shared_ptr<const TextSample>> samples_in_current_segment_;
+  std::list<std::shared_ptr<TextSample>> samples_in_current_segment_;
 };
 
 }  // namespace media

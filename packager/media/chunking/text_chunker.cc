@@ -75,20 +75,23 @@ Status TextChunker::OnCueEvent(std::shared_ptr<const CueEvent> event) {
 Status TextChunker::OnTextSample(std::shared_ptr<const TextSample> sample) {
   // Output all segments that come before our new sample.
   const int64_t sample_start = sample->start_time();
-  const int64_t sample_dur = sample->duration();
+  const auto role = sample->role();
 
-  if (sample_dur > 6* time_scale_) {
-    LOG(WARNING) << "Very long text sample. start=" << sample_start << " dur=" << sample_dur << " timescale=" << time_scale_;
-    LOG(INFO) << "body=" << sample->body().body;
-  }
-
-  auto dur = sample->duration();
-  if (dur < 0) {
-    LOG(INFO) << "Media-triggered HeartBeat=" << sample->start_time();
-  } else if (dur == 0) {
-    LOG(INFO) << "OnTextSample HeartBeat=" << sample->start_time();
-  } else {
-    LOG(INFO) << "OnTextSample start=" << sample->start_time() << " end=" << sample->start_time() + sample->duration();
+  switch (role) {
+    case TextSampleRole::kCue:
+      LOG(INFO) << "Cue sample started. pts=" << sample->start_time();
+      break;
+    case TextSampleRole::kCueEnd:
+      LOG(INFO) << "CueEnd sample. pts=" << sample->EndTime();
+      break;
+    case TextSampleRole::kMediaHeartBeat:
+      LOG(INFO) << "Media HeartBeat. pts=" << sample->start_time();
+      break;
+    case TextSampleRole::kTextHeartBeat:
+      LOG(INFO) << "Text HeartBeat. pts=" << sample->start_time();
+      break;
+    default:
+      LOG(ERROR) << "Unknown role encountered. pts=" << sample->start_time();
   }
 
   // If we have not seen a sample yet, base all segments off the first sample's
@@ -101,6 +104,17 @@ Status TextChunker::OnTextSample(std::shared_ptr<const TextSample> sample) {
     LOG(INFO) << "first segment start=" << segment_start_;
   }
 
+  if (role == TextSampleRole::kCueEnd) {
+    for (auto s : samples_in_current_segment_) {
+      if (s->role() == TextSampleRole::kCue && s->sub_stream_index() == sample->sub_stream_index()) {
+        auto end_time = sample->EndTime();
+        auto new_dur = end_time - s->start_time();
+        s->set_duration(new_dur);
+        LOG(INFO) << "reset sample duration pts=" << s->start_time() << " dur=" << new_dur;
+      }
+    }
+  }
+
   // We need to write all the segments that would have ended before the new
   // sample started.
   while (sample_start >= segment_start_ + segment_duration_) {
@@ -108,8 +122,10 @@ Status TextChunker::OnTextSample(std::shared_ptr<const TextSample> sample) {
     RETURN_IF_ERROR(DispatchSegment(segment_duration_));
   }
 
-  if (sample->duration() > 0) {
-    samples_in_current_segment_.push_back(std::move(sample));
+  if (sample->role() == TextSampleRole::kCue) {
+    // auto nonconst_sample = std::const_pointer_cast<TextSample>(sample);
+    auto sample_copy = std::make_shared<TextSample>(*sample);
+    samples_in_current_segment_.push_back(std::move(sample_copy));
   } else {
     sample.reset();  // Free sample
   }

@@ -510,10 +510,10 @@ void Mp2tMediaParser::update_biggest_pts(int64_t pts) {
         continue;
       }
       TextSettings text_settings;
-      // A sample with duration == -1 signals heart beat PTS from other media
-      auto neg_dur_sample = std::make_shared<TextSample>("", pts, pts-1, text_settings,
-                                                TextFragment({}, ""));
-      OnEmitTextSample(uint32_t(pid), neg_dur_sample);
+      auto heartbeat = std::make_shared<TextSample>("", pts, pts, text_settings,
+                                                TextFragment({}, ""),
+                                                TextSampleRole::kMediaHeartBeat);
+      OnEmitTextSample(uint32_t(pid), heartbeat);
     }
   }
 }

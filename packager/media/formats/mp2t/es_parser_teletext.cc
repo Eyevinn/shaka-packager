@@ -23,7 +23,7 @@ constexpr const char* kRegionTeletextPrefix = "ttx_";
 const uint8_t EBU_TELETEXT_WITH_SUBTITLING = 0x03;
 const int kPayloadSize = 40;
 const int kNumTriplets = 13;
-const int64_t maxTimeBetweenSampleGeneration = 45000; // 0.5s
+const int64_t maxTimeBetweenSampleGeneration = 9000; // 0.1s
 
 template <typename T>
 constexpr T bit(T value, const size_t bit_pos) {
@@ -112,7 +112,7 @@ EsParserTeletext::EsParserTeletext(const uint32_t pid,
       charset_code_(0),
       current_charset_{},
       last_pts_(-1),
-      inside_sample(false) {
+      inside_sample_(false) {
   if (!ParseSubtitlingDescriptor(descriptor, descriptor_length, languages_)) {
     LOG(ERROR) << "Unable to parse teletext_descriptor";
   }
@@ -146,7 +146,7 @@ bool EsParserTeletext::Flush() {
   }
 
   for (const auto key : keys) {
-    SendPending(key, last_pts_);
+    SendCueEnd(key, last_pts_);
   }
 
   return true;
@@ -158,7 +158,7 @@ void EsParserTeletext::Reset() {
   page_number_ = 0;
   sent_info_ = false;
   charset_code_ = 0;
-  inside_sample = false;
+  inside_sample_ = false;
   UpdateCharset();
 }
 
@@ -234,8 +234,7 @@ bool EsParserTeletext::ParseInternal(const uint8_t* data,
     }
     rows.clear();
   }
-
-  SendHeartBeatSample(pts);
+  SendStartedCue(index);
   return true;
 }
 
@@ -265,9 +264,8 @@ bool EsParserTeletext::ParseDataBlock(const int64_t pts,
         last_pts_ << " pts=" << pts;
     }
     last_pts_ = pts;  // This should ideally be done for each index.
-    inside_sample = false;
 
-    SendPending(index, pts);
+    SendCueEnd(index, pts);
 
     page_number_ = page_number;
     magazine_ = magazine;
@@ -289,7 +287,7 @@ bool EsParserTeletext::ParseDataBlock(const int64_t pts,
   } else if (packet_nr > 26) {
     return false;
   }
-  inside_sample = true;
+  inside_sample_ = true;
   const uint16_t index = magazine_ * 100 + page_number_;
   LOG(INFO) << "packet_nr=" << packet_nr << " index=" << index;
   const auto page_state_itr = page_state_.find(index);
@@ -377,7 +375,7 @@ void EsParserTeletext::SendPending(const uint16_t index, const int64_t pts) {
     emit_sample_cb_(text_sample);
     page_state_.erase(index);
     LOG(INFO) << "erased page_state single-row index=" << index;
-    inside_sample = false;
+    inside_sample_ = false;
     return;
   } else {
     int32_t latest_row_nr = -1;
@@ -426,23 +424,111 @@ void EsParserTeletext::SendPending(const uint16_t index, const int64_t pts) {
 
   page_state_.erase(index);
   LOG(INFO) << "erased page_state multiple-rows index=" << index;
-  inside_sample = false;
+  inside_sample_ = false;
 }
 
-// SendCueStart emits a text sample with body but zero duration
+// SendCueStart emits a text sample with body and cue_duration_placeholder
 // since the duration is not yet known
-void EsParserTeletext::SendCueStart(const int64_t pts) {
-  if (!inside_sample) {
-    // No reason to send anything
-    LOG(WARNING) << "SendCueStart called without inside_sample";
+void EsParserTeletext::SendStartedCue(const uint16_t index) {
+auto page_state_itr = page_state_.find(index);
+
+  if (page_state_itr == page_state_.end()) {
     return;
   }
-    TextSettings text_settings;
-    auto text_sample = std::make_shared<TextSample>("", pts, pts, text_settings,
-                                                    TextFragment({}, ""));
-    //LOG(INFO) << "empty sample, time_diff=" << timestamp_diff << " pts=" << text_sample->start_time();
+
+  if (page_state_itr->second.rows.empty()) {
+    page_state_.erase(index);
+    return;
+  }
+
+  inside_sample_ = true;
+
+
+  const auto& pending_rows = page_state_itr->second.rows;
+  const auto pts_start = page_state_itr->second.pts;
+  const auto pts_end = pts_start + cue_duration_placeholder;
+
+  TextSettings text_settings;
+  std::shared_ptr<TextSample> text_sample;
+  std::vector<TextFragment> sub_fragments;
+
+  if (pending_rows.size() == 1) {
+    // This is a single line of formatted text.
+    // Propagate row number/2 and alignment
+    const float line_nr = float(pending_rows[0].row_number) / 2.0;
+    text_settings.line = TextNumber(line_nr, TextUnitType::kLines);
+    text_settings.region = kRegionTeletextPrefix + std::to_string(int(line_nr));
+    text_settings.text_alignment = pending_rows[0].alignment;
+    text_sample = std::make_shared<TextSample>(
+        "", pts_start, pts_end, text_settings, pending_rows[0].fragment);
+    text_sample->set_sub_stream_index(index);
+    LOG(INFO) << "send 1 row pts=" << pts_start;
     emit_sample_cb_(text_sample);
-    last_pts_ = pts;
+    page_state_.erase(index);
+    LOG(INFO) << "erased page_state single-row index=" << index;
+    inside_sample_ = false;
+    return;
+  } else {
+    int32_t latest_row_nr = -1;
+    bool last_double_height = false;
+    bool new_sample = true;
+    for (const auto& row : pending_rows) {
+      int row_nr = row.row_number;
+      bool double_height = row.double_height;
+      int row_step = last_double_height ? 2 : 1;
+      if (latest_row_nr != -1) {  // Not the first row
+        if (row_nr != latest_row_nr + row_step) {
+          // Send what has been collected since not adjacent
+          text_sample =
+              std::make_shared<TextSample>("", pts_start, pts_end, text_settings,
+                                           TextFragment({}, sub_fragments));
+          text_sample->set_sub_stream_index(index);
+          LOG(INFO) << "send non-adjacent pts=" << pts_start;;
+          emit_sample_cb_(text_sample);
+          new_sample = true;
+        } else {
+          // Add a newline and the next row to the current sample
+          sub_fragments.push_back(TextFragment({}, true));
+          sub_fragments.push_back(row.fragment);
+          new_sample = false;
+        }
+      }
+      if (new_sample) {
+        const float line_nr = float(row.row_number) / 2.0;
+        text_settings.line = TextNumber(line_nr, TextUnitType::kLines);
+        text_settings.region =
+            kRegionTeletextPrefix + std::to_string(int(line_nr));
+        text_settings.text_alignment = row.alignment;
+        sub_fragments.clear();
+        sub_fragments.push_back(row.fragment);
+      }
+      last_double_height = double_height;
+      latest_row_nr = row_nr;
+    }
+  }
+
+  text_sample = std::make_shared<TextSample>(
+      "", pts_start, pts_end, text_settings, TextFragment({}, sub_fragments));
+  text_sample->set_sub_stream_index(index);
+  LOG(INFO) << "send final pts=" << pts_start;
+  emit_sample_cb_(text_sample);
+
+  page_state_.erase(index);
+  LOG(INFO) << "erased page_state multiple-rows index=" << index;
+}
+
+void EsParserTeletext::SendCueEnd(const uint16_t index, const int64_t pts_end) {
+  TextSettings text_settings;
+  auto pts_start = last_pts_;
+
+  auto text_sample = std::make_shared<TextSample>("", pts_start, pts_end, text_settings,
+                                                TextFragment({}, ""),
+                                                TextSampleRole::kCueEnd);
+  text_sample->set_sub_stream_index(index);
+  LOG(INFO) << "for index=" << index <<" send cue end at pts=" << pts_end;
+  emit_sample_cb_(text_sample);
+  last_pts_ = pts_end;
+  inside_sample_ = false;
 }
 
 // SendHeartBeatSample emits an empty sample if too much time has passed.
@@ -452,14 +538,11 @@ void EsParserTeletext::SendHeartBeatSample(const int64_t pts) {
     return;
   }
   int64_t timestamp_diff = pts - last_pts_;
-  if (inside_sample) {
-    LOG(INFO) << "inside sample pts=" << pts << " time_diff=" << timestamp_diff;
-    return;
-  }
   if (timestamp_diff >= maxTimeBetweenSampleGeneration) {
     TextSettings text_settings;
     auto text_sample = std::make_shared<TextSample>("", pts, pts, text_settings,
-                                                    TextFragment({}, ""));
+                                                    TextFragment({}, ""),
+                                                    TextSampleRole::kTextHeartBeat);
     //LOG(INFO) << "empty sample, time_diff=" << timestamp_diff << " pts=" << text_sample->start_time();
     emit_sample_cb_(text_sample);
     last_pts_ = pts;
