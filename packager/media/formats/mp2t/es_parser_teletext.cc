@@ -217,11 +217,12 @@ bool EsParserTeletext::ParseInternal(const uint8_t* data,
     }
   }
 
+  const uint16_t index = magazine_ * 100 + page_number_;
   if (rows.empty()) {
-    SendHeartBeatSample(pts);
+    SendHeartBeatSample(pts); //Sample(index, pts); //TOBBE. Why is CueEnd worse than HeartBeat
     return true;
   }
-  const uint16_t index = magazine_ * 100 + page_number_;
+
   auto page_state_itr = page_state_.find(index);
   if (page_state_itr == page_state_.end()) { //TOBBE. index does not exist. Start new.
     LOG(INFO) << "page_state start pts=" << last_pts_ << " nr_rows=" << rows.size();
@@ -369,7 +370,8 @@ void EsParserTeletext::SendPending(const uint16_t index, const int64_t pts) {
     text_settings.region = kRegionTeletextPrefix + std::to_string(int(line_nr));
     text_settings.text_alignment = pending_rows[0].alignment;
     text_sample = std::make_shared<TextSample>(
-        "", pending_pts, pts, text_settings, pending_rows[0].fragment);
+        "", pending_pts, pts, text_settings,
+        pending_rows[0].fragment);
     text_sample->set_sub_stream_index(index);
     LOG(INFO) << "send 1 row pending_pts=" << pending_pts << " pts=" << pts;
     emit_sample_cb_(text_sample);
@@ -427,7 +429,7 @@ void EsParserTeletext::SendPending(const uint16_t index, const int64_t pts) {
   inside_sample_ = false;
 }
 
-// SendCueStart emits a text sample with body and cue_duration_placeholder
+// SendCueStart emits a text sample with body and ttx_cue_duration_placeholder
 // since the duration is not yet known
 void EsParserTeletext::SendStartedCue(const uint16_t index) {
 auto page_state_itr = page_state_.find(index);
@@ -446,7 +448,7 @@ auto page_state_itr = page_state_.find(index);
 
   const auto& pending_rows = page_state_itr->second.rows;
   const auto pts_start = page_state_itr->second.pts;
-  const auto pts_end = pts_start + cue_duration_placeholder;
+  const auto pts_end = pts_start + ttx_cue_duration_placeholder;
 
   TextSettings text_settings;
   std::shared_ptr<TextSample> text_sample;
@@ -460,7 +462,8 @@ auto page_state_itr = page_state_.find(index);
     text_settings.region = kRegionTeletextPrefix + std::to_string(int(line_nr));
     text_settings.text_alignment = pending_rows[0].alignment;
     text_sample = std::make_shared<TextSample>(
-        "", pts_start, pts_end, text_settings, pending_rows[0].fragment);
+        "", pts_start, pts_end, text_settings, pending_rows[0].fragment,
+        TextSampleRole::kCueWithoutEnd);
     text_sample->set_sub_stream_index(index);
     LOG(INFO) << "send 1 row pts=" << pts_start;
     emit_sample_cb_(text_sample);
@@ -481,7 +484,8 @@ auto page_state_itr = page_state_.find(index);
           // Send what has been collected since not adjacent
           text_sample =
               std::make_shared<TextSample>("", pts_start, pts_end, text_settings,
-                                           TextFragment({}, sub_fragments));
+                                           TextFragment({}, sub_fragments),
+                                             TextSampleRole::kCueWithoutEnd);
           text_sample->set_sub_stream_index(index);
           LOG(INFO) << "send non-adjacent pts=" << pts_start;;
           emit_sample_cb_(text_sample);
@@ -508,9 +512,11 @@ auto page_state_itr = page_state_.find(index);
   }
 
   text_sample = std::make_shared<TextSample>(
-      "", pts_start, pts_end, text_settings, TextFragment({}, sub_fragments));
+      "", pts_start, pts_end, text_settings, TextFragment({},
+        sub_fragments), TextSampleRole::kCueWithoutEnd);
+
   text_sample->set_sub_stream_index(index);
-  LOG(INFO) << "send final pts=" << pts_start;
+  LOG(INFO) << "send final cue pts=" << pts_start;
   emit_sample_cb_(text_sample);
 
   page_state_.erase(index);
@@ -518,6 +524,10 @@ auto page_state_itr = page_state_.find(index);
 }
 
 void EsParserTeletext::SendCueEnd(const uint16_t index, const int64_t pts_end) {
+  if (last_pts_ == -1) {
+    last_pts_ = pts_end;
+    return;
+  }
   TextSettings text_settings;
   auto pts_start = last_pts_;
 
@@ -540,7 +550,7 @@ void EsParserTeletext::SendHeartBeatSample(const int64_t pts) {
   int64_t timestamp_diff = pts - last_pts_;
   if (timestamp_diff >= maxTimeBetweenSampleGeneration) {
     TextSettings text_settings;
-    auto text_sample = std::make_shared<TextSample>("", pts, pts, text_settings,
+    auto text_sample = std::make_shared<TextSample>("", pts+9000, pts, text_settings,
                                                     TextFragment({}, ""),
                                                     TextSampleRole::kTextHeartBeat);
     //LOG(INFO) << "empty sample, time_diff=" << timestamp_diff << " pts=" << text_sample->start_time();

@@ -87,6 +87,8 @@ struct TextFragmentStyle {
   std::string backgroundColor;
 };
 
+const int64_t ttx_cue_duration_placeholder = 10*90000; // 10s
+
 /// Represents a recursive structure of styled blocks of text.  Only one of
 /// sub_fragments, body, image, or newline will be set.
 struct TextFragment {
@@ -116,9 +118,11 @@ struct TextFragment {
 };
 
 enum class TextSampleRole {
-  /// Is Cue, but duration not yet trimmed
+  // Complete cue with bot start and end time
   kCue,
-  /// EndTime should modify current Cue
+  /// kCue is cue with start time but no end time
+  kCueWithoutEnd,
+  /// EndTime to end kCueWithoutEnd
   kCueEnd,
   /// Incoming PTS on text pid. Sent as start_time
   kTextHeartBeat,
@@ -144,7 +148,6 @@ class TextSample {
   const std::string& id() const { return id_; }
   int64_t start_time() const { return start_time_; }
   int64_t duration() const { return duration_; }
-  void set_duration (int64_t duration) { duration_ = duration; }
   const TextSettings& settings() const { return settings_; }
   const TextFragment& body() const { return body_; }
   void shift_start_time(int64_t shift) { start_time_ += shift; };

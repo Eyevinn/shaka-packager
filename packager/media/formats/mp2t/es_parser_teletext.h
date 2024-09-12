@@ -19,7 +19,7 @@ namespace shaka {
 namespace media {
 namespace mp2t {
 
-const int64_t cue_duration_placeholder = 30*90000; // 30s
+const int64_t ttx_cue_duration_placeholder = 30*90000; // 30s
 
 class EsParserTeletext : public EsParser {
  public:
