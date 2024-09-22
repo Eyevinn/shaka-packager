@@ -299,7 +299,6 @@ void Demuxer::ParserInitEvent(
       } else {
         init_event_status_.Update(
             DispatchStreamInfo(stream_index, stream_info));
-        LOG(INFO) << "Stream " << stream_index << " heartbeat_shift " << stream_info->heartbeat_shift();
       }
     } else {
       track_id_to_stream_index_map_[stream_info->track_id()] =
@@ -336,12 +335,6 @@ bool Demuxer::NewMediaSampleEvent(uint32_t track_id,
 
 bool Demuxer::NewTextSampleEvent(uint32_t track_id,
                                  std::shared_ptr<TextSample> sample) {
-  if (sample->duration() == -1) {
-    // Shift external heart beats to lower values to avoid too early
-    // triggering of text segments
-    sample->shift_start_time(-heartbeat_shift());
-  }
-
   if (!all_streams_ready_) {
     if (queued_text_samples_.size() >= kQueuedSamplesLimit) {
       LOG(ERROR) << "Queued samples limit reached: " << kQueuedSamplesLimit;

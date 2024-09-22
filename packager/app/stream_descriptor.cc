@@ -66,7 +66,6 @@ const FieldNameToTypeMapping kFieldNameTypeMappings[] = {
     {"language", kLanguageField},
     {"lang", kLanguageField},
     {"cc_index", kCcIndexField},
-      {"heartbeat_shift", kTtxHeartBeatShiftField},
     {"output_format", kOutputFormatField},
     {"format", kOutputFormatField},
     {"hls_name", kHlsNameField},
@@ -154,15 +153,6 @@ std::optional<StreamDescriptor> ParseStreamDescriptor(
           return std::nullopt;
         }
         descriptor.cc_index = index;
-        break;
-      }
-      case kTtxHeartBeatShiftField: {
-        int32_t heartbeat_shift;
-        if (!absl::SimpleAtoi(pair.second, &heartbeat_shift)) {
-          LOG(ERROR) << "Non-numeric heartbeat_shift specified.";
-          return std::nullopt;
-        }
-        descriptor.heartbeat_shift = heartbeat_shift;
         break;
       }
       case kOutputFormatField: {

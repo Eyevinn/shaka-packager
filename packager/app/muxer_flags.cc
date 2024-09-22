@@ -74,6 +74,18 @@ ABSL_FLAG(
     "of the stream will not be padded as we cannot assume the start time of "
     "the stream.");
 
+ABSL_FLAG(
+    int64_t,
+    ts_text_trigger_shift,
+    180000,
+    "A positive value, in 90kHz clock. It is a shift applied to "
+    "other elementary streams PTS values to generate a heart beat for "
+    "generating text chunks from teletext in MPEG-2 TS input. "
+    "The purpose is to generate text chunks at approximately the same "
+    "time as other segments, even if there is no data in the text stream. "
+    "A smaller value results in earlier generation, but at the risk of "
+    "premature generation with incorrect cue start or end time.");
+
 ABSL_FLAG(int64_t,
           start_segment_number,
           1,

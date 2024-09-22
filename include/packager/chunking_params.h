@@ -34,6 +34,14 @@ struct ChunkingParams {
 
   /// Indicates the startNumber in DASH SegmentTemplate and HLS segment name.
   int64_t start_segment_number = 1;
+
+  // A shift in PTS values for text heart beats from other MPEG-2 TS
+  // elementary streams. The purpose is to generate text chunks
+  // at roughly the same time as the other media, even when there is no data
+  // on the text pid. The scale is 90000 and the value should typically be
+  // 1-2 seconds to avoid that premature chunk generation before true cue data
+  // has arrived.
+  int64_t ts_text_trigger_shift = 180000 ;
 };
 
 }  // namespace shaka

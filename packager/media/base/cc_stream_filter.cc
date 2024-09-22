@@ -12,12 +12,8 @@
 namespace shaka {
 namespace media {
 
-CcStreamFilter::CcStreamFilter(const std::string& language, uint16_t cc_index,
-  int32_t heartbeat_shift)
-    : language_(language), cc_index_(cc_index), heartbeat_shift_(heartbeat_shift) {}
-
 CcStreamFilter::CcStreamFilter(const std::string& language, uint16_t cc_index)
-    : language_(language), cc_index_(cc_index), heartbeat_shift_(0) {}
+    : language_(language), cc_index_(cc_index) {}
 
 Status CcStreamFilter::InitializeInternal() {
   return Status::OK;
@@ -45,7 +41,6 @@ Status CcStreamFilter::Process(std::unique_ptr<StreamData> stream_data) {
           clone->set_language(it->second.language);
         }
       }
-      clone->set_heartbeat_shift(heartbeat_shift_);
 
       stream_data = StreamData::FromStreamInfo(stream_data->stream_index,
                                                std::move(clone));

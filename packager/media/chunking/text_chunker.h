@@ -22,6 +22,9 @@ class TextChunker : public MediaHandler {
  public:
   explicit TextChunker(double segment_duration_in_seconds,
                        int64_t start_segment_number);
+  explicit TextChunker(double segment_duration_in_seconds,
+                     int64_t start_segment_number,
+                     int64_t end_segment_number);
 
  private:
   TextChunker(const TextChunker&) = delete;
@@ -56,6 +59,13 @@ class TextChunker : public MediaHandler {
   // Segment number that keeps monotonically increasing.
   // Set to start_segment_number in constructor.
   int64_t segment_number_ = 1;
+
+  // A shift in PTS values for text heart beats from other MPEG-2 TS
+  // elementary streams. Can be set from command line.
+  int64_t ts_text_trigger_shift_ = 180000;
+
+  // Used to check if media heart beats are coming before text timestamps
+  int64_t latest_media_heartbeat_time_ = -1;
 
   // All samples that make up the current segment. We must store the samples
   // until the segment ends because a cue event may end the segment sooner

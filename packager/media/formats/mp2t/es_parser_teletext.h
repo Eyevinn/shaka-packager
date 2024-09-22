@@ -91,6 +91,7 @@ class EsParserTeletext : public EsParser {
   uint8_t charset_code_;
   char current_charset_[96][3];
   int64_t last_pts_;
+  int64_t last_end_pts_;
   bool inside_sample_;
 };
 

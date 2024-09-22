@@ -108,7 +108,6 @@ class StreamInfo {
   const EncryptionConfig& encryption_config() const {
     return encryption_config_;
   }
-  int32_t heartbeat_shift() const { return heartbeat_shift_; }
 
   void set_duration(int64_t duration) { duration_ = duration; }
   void set_codec(Codec codec) { codec_ = codec; }
@@ -126,7 +125,6 @@ class StreamInfo {
   void set_encryption_config(const EncryptionConfig& encryption_config) {
     encryption_config_ = encryption_config;
   }
-  void set_heartbeat_shift(int32_t heartbeat_shift) { heartbeat_shift_ = heartbeat_shift; }
 
  private:
   // Whether the stream is Audio or Video.
@@ -149,7 +147,6 @@ class StreamInfo {
   // Optional byte data required for some audio/video decoders such as Vorbis
   // codebooks.
   std::vector<uint8_t> codec_config_;
-  int32_t heartbeat_shift_;
 
   // Not using DISALLOW_COPY_AND_ASSIGN here intentionally to allow the compiler
   // generated copy constructor and assignment operator. Since the extra data is

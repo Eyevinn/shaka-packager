@@ -466,10 +466,10 @@ void Mp2tMediaParser::OnEmitTextSample(uint32_t pes_pid,
     return;
   }
 
-  if (new_sample->duration() >= 0) {
-    // Remove pending media-generated heart beats (duration < 0)
+  if (new_sample->role() != TextSampleRole::kMediaHeartBeat) {
+    // Remove kMediaHeartBeats from the end of the queue
     while (!pid_state->second->text_sample_queue_.empty()) {
-      if (pid_state->second->text_sample_queue_.back()->duration() >= 0) {
+      if (pid_state->second->text_sample_queue_.back()->role() != TextSampleRole::kMediaHeartBeat) {
         break;
       }
       pid_state->second->text_sample_queue_.pop_back();
@@ -513,6 +513,7 @@ void Mp2tMediaParser::update_biggest_pts(int64_t pts) {
       auto heartbeat = std::make_shared<TextSample>("", pts, pts, text_settings,
                                                 TextFragment({}, ""),
                                                 TextSampleRole::kMediaHeartBeat);
+      //LOG(WARNING) << "Media heartbeat generated = " << pid << " pts=" << pts;
       OnEmitTextSample(uint32_t(pid), heartbeat);
     }
   }

@@ -16,10 +16,17 @@ namespace {
 const size_t kStreamIndex = 0;
 }  // namespace
 
+TextChunker::TextChunker(double segment_duration_in_seconds,int64_t start_segment_number)
+: segment_duration_in_seconds_(segment_duration_in_seconds),
+  segment_number_(start_segment_number),
+  ts_text_trigger_shift_(180000){};
+
 TextChunker::TextChunker(double segment_duration_in_seconds,
-                         int64_t start_segment_number)
+                         int64_t start_segment_number,
+                         int64_t ts_text_trigger_shift)
     : segment_duration_in_seconds_(segment_duration_in_seconds),
-      segment_number_(start_segment_number){};
+      segment_number_(start_segment_number),
+      ts_text_trigger_shift_(ts_text_trigger_shift){};
 
 Status TextChunker::Process(std::unique_ptr<StreamData> data) {
   switch (data->stream_data_type) {
@@ -73,7 +80,11 @@ Status TextChunker::OnCueEvent(std::shared_ptr<const CueEvent> event) {
 }
 
 Status TextChunker::OnTextSample(std::shared_ptr<const TextSample> sample) {
-  // Output all segments that come before our new sample.
+  // Output all segments that come before our new sample start_time.
+  // However, if role is MediaHeartBeat, remove 2s to avoid premature segment
+  // generation.
+
+  int64_t sample_start = sample->start_time();
 
   // If we have not seen a sample yet, base all segments off the first sample's
   // start time.
@@ -81,7 +92,6 @@ Status TextChunker::OnTextSample(std::shared_ptr<const TextSample> sample) {
     // Force the first segment to start at the segment that would have started
     // before the sample. This should allow segments from different streams to
     // align.
-    const int64_t sample_start = sample->start_time();
     segment_start_ = (sample_start / segment_duration_) * segment_duration_;
     LOG(INFO) << "first segment start=" << segment_start_;
   }
@@ -91,33 +101,44 @@ Status TextChunker::OnTextSample(std::shared_ptr<const TextSample> sample) {
 
   switch (role) {
     case TextSampleRole::kCue: {
-      LOG(INFO) << "Full cue: "<< sample->start_time() << " - " << sample->EndTime();
+      //LOG(INFO) << "PTS=" << sample_start << " cue with end " << sample->EndTime();
       break;
     }
     case TextSampleRole::kCueWithoutEnd: {
-        LOG(INFO) << "Cue wo end received: "<< sample->start_time();
+      LOG(INFO) << "PTS=" << sample_start << " cue start wo end";
       break;
     }
     case TextSampleRole::kCueEnd: {
-      // Convert any cues without end to cues
+      //LOG(INFO) << "PTS=" << sample_start << " cue end";
+      // Convert any cues without end to full cues (but only once)
       auto end_time = sample->EndTime();
       for (auto s : samples_without_end_) {
         auto nS = std::make_shared<TextSample>("", s->start_time(), end_time,
               s->settings(), s->body(), TextSampleRole::kCue);
+        LOG(INFO) << "cue shortened. startTime=" << s->start_time() << " endTime=" << end_time;
+        samples_in_current_segment_.push_back(nS);
       }
-      LOG(INFO) << "CueEnd sample: " << sample->EndTime();
+      samples_without_end_.clear();
       break;
     }
     case TextSampleRole::kMediaHeartBeat: {
-      LOG(INFO) << "Media HeartBeat: " << sample->start_time();
+      sample_start -= ts_text_trigger_shift_;
+      latest_media_heartbeat_time_ = sample_start;
+      //LOG(INFO) << "PTS=" << sample_start << " media heartbeat";
     break;
     }
     case TextSampleRole::kTextHeartBeat: {
-      LOG(INFO) << "Text HeartBeat: " << sample->start_time();
+      LOG(INFO) << "PTS=" << sample_start << " text heartbeat";
       break;
     }
     default: {
-      LOG(ERROR) << "Unknown role encountered. pts=" << sample->start_time();
+      LOG(ERROR) << "Unknown role encountered. pts=" << sample_start;
+    }
+  }
+
+  if (role != TextSampleRole::kMediaHeartBeat) {
+    if (sample_start < latest_media_heartbeat_time_) {
+      LOG(WARNING) << "Potentially bad text segment: text pts=" << sample_start << " before latest media pts=" << latest_media_heartbeat_time_;
     }
   }
 
@@ -135,7 +156,7 @@ Status TextChunker::OnTextSample(std::shared_ptr<const TextSample> sample) {
   // We need to write all the segments that would have ended before the new
   // sample started. For segment without end, we check if they have started
   // and if so, make cropped copy that goes to the end.
-  auto sample_start = sample->start_time();
+
   while (sample_start >= segment_start_ + segment_duration_) {
     auto segment_end = segment_start_ + segment_duration_;
     for (auto s: samples_without_end_) {
@@ -148,9 +169,9 @@ Status TextChunker::OnTextSample(std::shared_ptr<const TextSample> sample) {
           samples_in_current_segment_.push_back(std::move(nS));
         }
       }
-      // |DispatchSegment| will advance |segment_start_|.
-      RETURN_IF_ERROR(DispatchSegment(segment_duration_));
     }
+    // |DispatchSegment| will advance |segment_start_|.
+    RETURN_IF_ERROR(DispatchSegment(segment_duration_));
   }
 
   switch (role) {
@@ -160,18 +181,6 @@ Status TextChunker::OnTextSample(std::shared_ptr<const TextSample> sample) {
     }
     case TextSampleRole::kCueWithoutEnd: {
       samples_without_end_.push_back(std::move(sample));
-      break;
-    }
-    case TextSampleRole::kCueEnd: {
-      auto end_time = sample->start_time();
-      if (end_time > segment_start_) {
-        for (auto s: samples_without_end_) {
-          auto nS = std::make_shared<TextSample>("", segment_start_, end_time,
-            s->settings(), s->body(), TextSampleRole::kCue);
-          samples_in_current_segment_.push_back(std::move(nS));
-        }
-      }
-      samples_without_end_.clear();
       break;
     }
     default: {

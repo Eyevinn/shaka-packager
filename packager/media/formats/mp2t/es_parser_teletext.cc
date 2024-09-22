@@ -112,6 +112,7 @@ EsParserTeletext::EsParserTeletext(const uint32_t pid,
       charset_code_(0),
       current_charset_{},
       last_pts_(-1),
+      last_end_pts_(-1),
       inside_sample_(false) {
   if (!ParseSubtitlingDescriptor(descriptor, descriptor_length, languages_)) {
     LOG(ERROR) << "Unable to parse teletext_descriptor";
@@ -219,7 +220,7 @@ bool EsParserTeletext::ParseInternal(const uint8_t* data,
 
   const uint16_t index = magazine_ * 100 + page_number_;
   if (rows.empty()) {
-    SendHeartBeatSample(pts); //Sample(index, pts); //TOBBE. Why is CueEnd worse than HeartBeat
+    SendCueEnd(index, last_pts_);
     return true;
   }
 
@@ -465,10 +466,10 @@ auto page_state_itr = page_state_.find(index);
         "", pts_start, pts_end, text_settings, pending_rows[0].fragment,
         TextSampleRole::kCueWithoutEnd);
     text_sample->set_sub_stream_index(index);
-    LOG(INFO) << "send 1 row pts=" << pts_start;
+    //LOG(INFO) << "send 1 row pts=" << pts_start;
     emit_sample_cb_(text_sample);
     page_state_.erase(index);
-    LOG(INFO) << "erased page_state single-row index=" << index;
+    //LOG(INFO) << "erased page_state single-row index=" << index;
     inside_sample_ = false;
     return;
   } else {
@@ -487,7 +488,7 @@ auto page_state_itr = page_state_.find(index);
                                            TextFragment({}, sub_fragments),
                                              TextSampleRole::kCueWithoutEnd);
           text_sample->set_sub_stream_index(index);
-          LOG(INFO) << "send non-adjacent pts=" << pts_start;;
+          //LOG(INFO) << "send non-adjacent pts=" << pts_start;;
           emit_sample_cb_(text_sample);
           new_sample = true;
         } else {
@@ -528,16 +529,19 @@ void EsParserTeletext::SendCueEnd(const uint16_t index, const int64_t pts_end) {
     last_pts_ = pts_end;
     return;
   }
-  TextSettings text_settings;
-  auto pts_start = last_pts_;
+  if (pts_end == last_end_pts_) {
+    return;
+  }
 
-  auto text_sample = std::make_shared<TextSample>("", pts_start, pts_end, text_settings,
+  TextSettings text_settings;
+  auto end_sample = std::make_shared<TextSample>("", pts_end, pts_end, text_settings,
                                                 TextFragment({}, ""),
                                                 TextSampleRole::kCueEnd);
-  text_sample->set_sub_stream_index(index);
+  end_sample->set_sub_stream_index(index);
   LOG(INFO) << "for index=" << index <<" send cue end at pts=" << pts_end;
-  emit_sample_cb_(text_sample);
+  emit_sample_cb_(end_sample);
   last_pts_ = pts_end;
+  last_end_pts_ = pts_end;
   inside_sample_ = false;
 }
 
