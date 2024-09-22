@@ -127,10 +127,6 @@ Status TextChunker::OnTextSample(std::shared_ptr<const TextSample> sample) {
       //LOG(INFO) << "PTS=" << sample_start << " media heartbeat";
     break;
     }
-    case TextSampleRole::kTextHeartBeat: {
-      LOG(INFO) << "PTS=" << sample_start << " text heartbeat";
-      break;
-    }
     default: {
       LOG(ERROR) << "Unknown role encountered. pts=" << sample_start;
     }

@@ -122,10 +122,9 @@ enum class TextSampleRole {
   kCue,
   /// kCue is cue with start time but no end time
   kCueWithoutEnd,
-  /// EndTime to end kCueWithoutEnd
+  /// EndTime to end kCueWithoutEnd. Can be sent
+  /// multiple times with different times and then acts as heart beat.
   kCueEnd,
-  /// Incoming PTS on text pid. Sent as start_time
-  kTextHeartBeat,
   /// Incoming PTS on other media pid. Sent as start_time
   kMediaHeartBeat,
 };

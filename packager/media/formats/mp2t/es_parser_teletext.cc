@@ -23,7 +23,6 @@ constexpr const char* kRegionTeletextPrefix = "ttx_";
 const uint8_t EBU_TELETEXT_WITH_SUBTITLING = 0x03;
 const int kPayloadSize = 40;
 const int kNumTriplets = 13;
-const int64_t maxTimeBetweenSampleGeneration = 9000; // 0.1s
 
 template <typename T>
 constexpr T bit(T value, const size_t bit_pos) {
@@ -431,7 +430,8 @@ void EsParserTeletext::SendPending(const uint16_t index, const int64_t pts) {
 }
 
 // SendCueStart emits a text sample with body and ttx_cue_duration_placeholder
-// since the duration is not yet known
+// since the duration is not yet known. More importantly, the role of the
+// sample is set to kCueWithoutEnd.
 void EsParserTeletext::SendStartedCue(const uint16_t index) {
 auto page_state_itr = page_state_.find(index);
 
@@ -524,6 +524,7 @@ auto page_state_itr = page_state_.find(index);
   LOG(INFO) << "erased page_state multiple-rows index=" << index;
 }
 
+// SendCueEnd emits a text sample with kined kCueEnd to signal no data/cue end.
 void EsParserTeletext::SendCueEnd(const uint16_t index, const int64_t pts_end) {
   if (last_pts_ == -1) {
     last_pts_ = pts_end;
@@ -543,24 +544,6 @@ void EsParserTeletext::SendCueEnd(const uint16_t index, const int64_t pts_end) {
   last_pts_ = pts_end;
   last_end_pts_ = pts_end;
   inside_sample_ = false;
-}
-
-// SendHeartBeatSample emits an empty sample if too much time has passed.
-void EsParserTeletext::SendHeartBeatSample(const int64_t pts) {
-  if (last_pts_ == -1) {
-    last_pts_ = pts;
-    return;
-  }
-  int64_t timestamp_diff = pts - last_pts_;
-  if (timestamp_diff >= maxTimeBetweenSampleGeneration) {
-    TextSettings text_settings;
-    auto text_sample = std::make_shared<TextSample>("", pts+9000, pts, text_settings,
-                                                    TextFragment({}, ""),
-                                                    TextSampleRole::kTextHeartBeat);
-    //LOG(INFO) << "empty sample, time_diff=" << timestamp_diff << " pts=" << text_sample->start_time();
-    emit_sample_cb_(text_sample);
-    last_pts_ = pts;
-  }
 }
 
 // BuildRow builds a row with alignment information.
