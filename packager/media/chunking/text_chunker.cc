@@ -113,7 +113,11 @@ Status TextChunker::OnTextSample(std::shared_ptr<const TextSample> sample) {
       // Convert any cues without end to full cues (but only once)
       auto end_time = sample->EndTime();
       for (auto s : samples_without_end_) {
-        auto nS = std::make_shared<TextSample>("", s->start_time(), end_time,
+        int64_t cue_start = s->start_time();
+        if (cue_start < segment_start_) {
+          cue_start = segment_start_;
+        }
+        auto nS = std::make_shared<TextSample>("", cue_start, end_time,
               s->settings(), s->body(), TextSampleRole::kCue);
         LOG(INFO) << "cue shortened. startTime=" << s->start_time() << " endTime=" << end_time;
         samples_in_current_segment_.push_back(nS);
@@ -152,15 +156,20 @@ Status TextChunker::OnTextSample(std::shared_ptr<const TextSample> sample) {
   // We need to write all the segments that would have ended before the new
   // sample started. For segment without end, we check if they have started
   // and if so, make cropped copy that goes to the end.
+  // We also crop such a cue at the start if needed.
 
   while (sample_start >= segment_start_ + segment_duration_) {
-    auto segment_end = segment_start_ + segment_duration_;
+    int64_t segment_end = segment_start_ + segment_duration_;
     for (auto s: samples_without_end_) {
       if (s->role() == TextSampleRole::kCueWithoutEnd) {
         if (s->start_time() < segment_end) {
-          // Make a new cue with end.
+          // Make a new cue in current segment.
+          auto cue_start = s->start_time();
+          if (cue_start < segment_start_) {
+            cue_start = segment_start_;
+          }
           auto nS = std::make_shared<TextSample>("",
-            s->start_time(), segment_end,
+            cue_start, segment_end,
             s->settings(), s->body());
           samples_in_current_segment_.push_back(std::move(nS));
         }

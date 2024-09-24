@@ -118,14 +118,15 @@ struct TextFragment {
 };
 
 enum class TextSampleRole {
-  // Complete cue with bot start and end time
+  /// kCue is complete cue with both start and end time
   kCue,
-  /// kCue is cue with start time but no end time
+  /// kCueWithoutEnd is cue with start time but unknown end time
   kCueWithoutEnd,
-  /// EndTime to end kCueWithoutEnd. Can be sent
-  /// multiple times with different times and then acts as heart beat.
+  /// kCueEnd has time to end a kCueWithoutEnd, if ongooing.
+  /// Can be sent multiple times with different times and then acts as heart beat.
   kCueEnd,
-  /// Incoming PTS on other media pid. Sent as start_time
+  /// kMediaHeartBeat conveys a PTS from another media pid. Use its start_time.
+  /// Will typically be shifted up in order to avoid premature segment generation.
   kMediaHeartBeat,
 };
 
