@@ -290,7 +290,7 @@ bool EsParserTeletext::ParseDataBlock(const int64_t pts,
   }
   inside_sample_ = true;
   const uint16_t index = magazine_ * 100 + page_number_;
-  LOG(INFO) << "packet_nr=" << packet_nr << " index=" << index;
+  LOG(INFO) << "packet_nr=" << int(packet_nr) << " index=" << index;
   const auto page_state_itr = page_state_.find(index);
   if (page_state_itr != page_state_.cend()) {
     if (page_state_itr->second.rows.empty()) {
@@ -341,94 +341,6 @@ void EsParserTeletext::UpdateCharset() {
   }
 }
 
-void EsParserTeletext::SendPending(const uint16_t index, const int64_t pts) {
-  auto page_state_itr = page_state_.find(index);
-
-  if (page_state_itr == page_state_.end()) {
-    return;
-  }
-
-  if (page_state_itr->second.rows.empty()) {
-    page_state_.erase(index);
-    return;
-  }
-
-
-  const auto& pending_rows = page_state_itr->second.rows;
-  const auto pending_pts = page_state_itr->second.pts;
-  LOG(INFO) << "send pending_pts=" << pending_pts << " pts=" << pts;
-
-  TextSettings text_settings;
-  std::shared_ptr<TextSample> text_sample;
-  std::vector<TextFragment> sub_fragments;
-
-  if (pending_rows.size() == 1) {
-    // This is a single line of formatted text.
-    // Propagate row number/2 and alignment
-    const float line_nr = float(pending_rows[0].row_number) / 2.0;
-    text_settings.line = TextNumber(line_nr, TextUnitType::kLines);
-    text_settings.region = kRegionTeletextPrefix + std::to_string(int(line_nr));
-    text_settings.text_alignment = pending_rows[0].alignment;
-    text_sample = std::make_shared<TextSample>(
-        "", pending_pts, pts, text_settings,
-        pending_rows[0].fragment);
-    text_sample->set_sub_stream_index(index);
-    LOG(INFO) << "send 1 row pending_pts=" << pending_pts << " pts=" << pts;
-    emit_sample_cb_(text_sample);
-    page_state_.erase(index);
-    LOG(INFO) << "erased page_state single-row index=" << index;
-    inside_sample_ = false;
-    return;
-  } else {
-    int32_t latest_row_nr = -1;
-    bool last_double_height = false;
-    bool new_sample = true;
-    for (const auto& row : pending_rows) {
-      int row_nr = row.row_number;
-      bool double_height = row.double_height;
-      int row_step = last_double_height ? 2 : 1;
-      if (latest_row_nr != -1) {  // Not the first row
-        if (row_nr != latest_row_nr + row_step) {
-          // Send what has been collected since not adjacent
-          text_sample =
-              std::make_shared<TextSample>("", pending_pts, pts, text_settings,
-                                           TextFragment({}, sub_fragments));
-          text_sample->set_sub_stream_index(index);
-          LOG(INFO) << "send non-adjacent pending_pts=" << pending_pts << " pts=" << pts;
-          emit_sample_cb_(text_sample);
-          new_sample = true;
-        } else {
-          // Add a newline and the next row to the current sample
-          sub_fragments.push_back(TextFragment({}, true));
-          sub_fragments.push_back(row.fragment);
-          new_sample = false;
-        }
-      }
-      if (new_sample) {
-        const float line_nr = float(row.row_number) / 2.0;
-        text_settings.line = TextNumber(line_nr, TextUnitType::kLines);
-        text_settings.region =
-            kRegionTeletextPrefix + std::to_string(int(line_nr));
-        text_settings.text_alignment = row.alignment;
-        sub_fragments.clear();
-        sub_fragments.push_back(row.fragment);
-      }
-      last_double_height = double_height;
-      latest_row_nr = row_nr;
-    }
-  }
-
-  text_sample = std::make_shared<TextSample>(
-      "", pending_pts, pts, text_settings, TextFragment({}, sub_fragments));
-  text_sample->set_sub_stream_index(index);
-  LOG(INFO) << "send final pending_pts=" << pending_pts << " pts=" << pts;
-  emit_sample_cb_(text_sample);
-
-  page_state_.erase(index);
-  LOG(INFO) << "erased page_state multiple-rows index=" << index;
-  inside_sample_ = false;
-}
-
 // SendCueStart emits a text sample with body and ttx_cue_duration_placeholder
 // since the duration is not yet known. More importantly, the role of the
 // sample is set to kCueWithoutEnd.
@@ -468,7 +380,7 @@ auto page_state_itr = page_state_.find(index);
     text_sample->set_sub_stream_index(index);
     //LOG(INFO) << "send 1 row pts=" << pts_start;
     emit_sample_cb_(text_sample);
-    page_state_.erase(index);
+    page_state_itr->second.rows.clear(); // Remove this row, but keep packet26 replacements
     //LOG(INFO) << "erased page_state single-row index=" << index;
     inside_sample_ = false;
     return;
@@ -520,8 +432,8 @@ auto page_state_itr = page_state_.find(index);
   LOG(INFO) << "send final cue pts=" << pts_start;
   emit_sample_cb_(text_sample);
 
-  page_state_.erase(index);
-  LOG(INFO) << "erased page_state multiple-rows index=" << index;
+  page_state_itr->second.rows.clear();
+  LOG(INFO) << "clear rows, but keep packet26 page_state index=" << index;
 }
 
 // SendCueEnd emits a text sample with kined kCueEnd to signal no data/cue end.

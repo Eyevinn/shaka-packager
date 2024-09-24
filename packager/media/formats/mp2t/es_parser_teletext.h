@@ -66,7 +66,6 @@ class EsParserTeletext : public EsParser {
                       const uint8_t magazine,
                       TextRow& display_text);
   void UpdateCharset();
-  void SendPending(const uint16_t index, const int64_t pts);
   TextRow BuildRow(const uint8_t* data_block, const uint8_t row) const;
   void ParsePacket26(const uint8_t* data_block);
   void UpdateNationalSubset(const uint8_t national_subset[13][3]);

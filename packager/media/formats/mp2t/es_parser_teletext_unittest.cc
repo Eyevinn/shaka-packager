@@ -290,13 +290,16 @@ TEST_F(EsParserTeletextTest, pes_283413_line_emitted_on_next_pes) {
       es_parser_teletext->Parse(PES_407876, sizeof(PES_407876), 407876, 0);
   EXPECT_TRUE(parse_result);
 
-  EXPECT_NE(nullptr, text_sample_.get());
-  EXPECT_EQ(283413, text_sample_->start_time());
-  EXPECT_EQ(407876, text_sample_->EndTime());
-  EXPECT_EQ("Bon dia!", text_sample_->body().body);
-  EXPECT_EQ("black", text_sample_->body().style.backgroundColor);
-  EXPECT_EQ("white", text_sample_->body().style.color);
-  TextSettings settings = text_sample_->settings();
+  EXPECT_EQ(3, text_samples_.size());
+  EXPECT_EQ(TextSampleRole::kCueEnd, text_samples_[0]->role());
+  EXPECT_EQ(TextSampleRole::kCueWithoutEnd, text_samples_[1]->role());
+  EXPECT_EQ(TextSampleRole::kCueEnd, text_samples_[2]->role());
+  EXPECT_EQ(283413, text_samples_[1]->start_time());
+  EXPECT_EQ(407876, text_samples_[2]->EndTime());
+  EXPECT_EQ("Bon dia!", text_samples_[1]->body().body);
+  EXPECT_EQ("black", text_samples_[1]->body().style.backgroundColor);
+  EXPECT_EQ("white", text_samples_[1]->body().style.color);
+  TextSettings settings = text_samples_[1]->settings();
   EXPECT_EQ(TextAlignment::kCenter, settings.text_alignment);
   EXPECT_TRUE(settings.line.has_value());
   EXPECT_EQ(11, settings.line.value().value);
@@ -324,17 +327,19 @@ TEST_F(EsParserTeletextTest, multiple_lines_with_same_pts) {
       es_parser_teletext->Parse(PES_8937764, sizeof(PES_8937764), 8937764, 0);
   EXPECT_TRUE(parse_result);
 
-  EXPECT_NE(nullptr, text_sample_.get());
-  EXPECT_EQ(8773087, text_sample_->start_time());
-  EXPECT_EQ(8937764, text_sample_->EndTime());
-  EXPECT_EQ(3, text_sample_->body().sub_fragments.size());
-  EXPECT_EQ("-Sí?", text_sample_->body().sub_fragments[0].body);
-  EXPECT_TRUE(text_sample_->body().sub_fragments[1].newline);
-  EXPECT_EQ("-Sí.", text_sample_->body().sub_fragments[2].body);
-  TextSettings settings = text_sample_->settings();
+  EXPECT_EQ(3, text_samples_.size());
+  EXPECT_EQ(TextSampleRole::kCueEnd, text_samples_[0]->role());
+  EXPECT_EQ(TextSampleRole::kCueWithoutEnd, text_samples_[1]->role());
+  EXPECT_EQ(TextSampleRole::kCueEnd, text_samples_[2]->role());
+  EXPECT_EQ(8773087, text_samples_[1]->start_time());
+  EXPECT_EQ(8937764, text_samples_[2]->EndTime());
+  EXPECT_EQ(3, text_samples_[1]->body().sub_fragments.size());
+  EXPECT_EQ("-Sí?", text_samples_[1]->body().sub_fragments[0].body);
+  EXPECT_TRUE(text_samples_[1]->body().sub_fragments[1].newline);
+  EXPECT_EQ("-Sí.", text_samples_[1]->body().sub_fragments[2].body);
+  TextSettings settings = text_samples_[1]->settings();
   EXPECT_EQ(10, settings.line.value().value);
   EXPECT_EQ("ttx_10", settings.region);
-  EXPECT_EQ(1, text_samples_.size());
 }
 
 // separate_lines_with_slightly_different_pts has the original lines
@@ -362,23 +367,25 @@ TEST_F(EsParserTeletextTest, separate_lines_with_slightly_different_pts) {
   EXPECT_TRUE(parse_result);
 
   EXPECT_NE(nullptr, text_sample_.get());
-  EXPECT_EQ(2, text_samples_.size());
+  EXPECT_EQ(4, text_samples_.size());
+  EXPECT_EQ(TextSampleRole::kCueEnd, text_samples_[0]->role());
+  EXPECT_EQ(TextSampleRole::kCueWithoutEnd, text_samples_[1]->role());
+  EXPECT_EQ(TextSampleRole::kCueWithoutEnd, text_samples_[2]->role());
+  EXPECT_EQ(TextSampleRole::kCueEnd, text_samples_[3]->role());
   // The subtitles should get the same start and end time
-  EXPECT_EQ(867681, text_samples_[0]->start_time());
+  EXPECT_EQ(867681, text_samples_[0]->EndTime());
   EXPECT_EQ(867681, text_samples_[1]->start_time());
-  EXPECT_EQ(1011695, text_samples_[0]->EndTime());
-  EXPECT_EQ(1011695, text_samples_[0]->EndTime());
-  EXPECT_EQ(1, text_samples_[0]->body().sub_fragments.size());
-  EXPECT_EQ(1, text_samples_[1]->body().sub_fragments.size());
-  EXPECT_EQ("-Luke !", text_samples_[0]->body().sub_fragments[0].body);
-  EXPECT_EQ("ttx_9", text_samples_[0]->settings().region);
-  EXPECT_EQ(TextAlignment::kLeft, text_samples_[0]->settings().text_alignment);
+  EXPECT_EQ(867681, text_samples_[2]->start_time());
+  EXPECT_EQ(1011695, text_samples_[3]->EndTime());
+  EXPECT_EQ("-Luke !", text_samples_[1]->body().body);
+  EXPECT_EQ("ttx_9", text_samples_[1]->settings().region);
+  EXPECT_EQ(TextAlignment::kLeft, text_samples_[1]->settings().text_alignment);
   EXPECT_EQ("-Je vais aux cours d'été.",
-            text_samples_[1]->body().sub_fragments[0].body);
-  EXPECT_EQ(11, text_samples_[1]->settings().line.value().value);
-  EXPECT_EQ("ttx_11", text_samples_[1]->settings().region);
+            text_samples_[2]->body().body);
+  EXPECT_EQ(11, text_samples_[2]->settings().line.value().value);
+  EXPECT_EQ("ttx_11", text_samples_[2]->settings().region);
   EXPECT_EQ(TextAlignment::kCenter,
-            text_samples_[1]->settings().text_alignment);
+            text_samples_[2]->settings().text_alignment);
 }
 
 // consecutive_lines_with_slightly_different_pts has the original lines
@@ -406,23 +413,21 @@ TEST_F(EsParserTeletextTest, consecutive_lines_with_slightly_different_pts) {
   EXPECT_TRUE(parse_result);
 
   EXPECT_NE(nullptr, text_sample_.get());
-  EXPECT_EQ(1, text_samples_.size());
-  // The subtitles should get the same start and end time
-  EXPECT_EQ(1033297, text_sample_->start_time());
-  EXPECT_EQ(1173713, text_sample_->EndTime());
-  EXPECT_EQ(3, text_sample_->body().sub_fragments.size());
-  TextSettings settings = text_sample_->settings();
+  EXPECT_EQ(4, text_samples_.size());
+  // The cues get the same start time, and get erased at same time,
+  EXPECT_EQ(1033297, text_samples_[0]->EndTime());
+  EXPECT_EQ(1033297, text_samples_[1]->start_time());
+  EXPECT_EQ(1036900, text_samples_[2]->start_time());
+  EXPECT_EQ(1173713, text_samples_[3]->EndTime());
+  TextSettings settings = text_samples_[1]->settings();
   EXPECT_EQ(10, settings.line.value().value);
   EXPECT_EQ("ttx_10", settings.region);
   EXPECT_EQ(TextAlignment::kCenter, settings.text_alignment);
-  EXPECT_EQ("J'ai loupé", text_sample_->body().sub_fragments[0].body);
-  EXPECT_EQ("yellow", text_sample_->body().sub_fragments[0].style.color);
-  EXPECT_TRUE(text_sample_->body().sub_fragments[1].newline);
-  EXPECT_EQ("l'initiation à l'algèbre.",
-            text_sample_->body().sub_fragments[2].body);
-  EXPECT_EQ("yellow",
-            text_sample_->body().sub_fragments[2].style.backgroundColor);
-  EXPECT_EQ("blue", text_sample_->body().sub_fragments[2].style.color);
+  EXPECT_EQ("J'ai loupé", text_samples_[1]->body().body);
+  EXPECT_EQ("yellow", text_samples_[1]->body().style.color);
+  EXPECT_EQ("l'initiation à l'algèbre.", text_samples_[2]->body().body);
+  EXPECT_EQ("yellow",  text_samples_[2]->body().style.backgroundColor);
+  EXPECT_EQ("blue", text_samples_[2]->body().style.color);
 }
 
 // An empty TextSample should be generated every 500ms as no text
