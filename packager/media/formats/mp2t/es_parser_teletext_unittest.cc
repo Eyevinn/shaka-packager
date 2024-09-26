@@ -380,8 +380,7 @@ TEST_F(EsParserTeletextTest, separate_lines_with_slightly_different_pts) {
   EXPECT_EQ("-Luke !", text_samples_[1]->body().body);
   EXPECT_EQ("ttx_9", text_samples_[1]->settings().region);
   EXPECT_EQ(TextAlignment::kLeft, text_samples_[1]->settings().text_alignment);
-  EXPECT_EQ("-Je vais aux cours d'été.",
-            text_samples_[2]->body().body);
+  EXPECT_EQ("-Je vais aux cours d'été.", text_samples_[2]->body().body);
   EXPECT_EQ(11, text_samples_[2]->settings().line.value().value);
   EXPECT_EQ("ttx_11", text_samples_[2]->settings().region);
   EXPECT_EQ(TextAlignment::kCenter,
@@ -426,7 +425,7 @@ TEST_F(EsParserTeletextTest, consecutive_lines_with_slightly_different_pts) {
   EXPECT_EQ("J'ai loupé", text_samples_[1]->body().body);
   EXPECT_EQ("yellow", text_samples_[1]->body().style.color);
   EXPECT_EQ("l'initiation à l'algèbre.", text_samples_[2]->body().body);
-  EXPECT_EQ("yellow",  text_samples_[2]->body().style.backgroundColor);
+  EXPECT_EQ("yellow", text_samples_[2]->body().style.backgroundColor);
   EXPECT_EQ("blue", text_samples_[2]->body().style.color);
 }
 
@@ -452,8 +451,7 @@ TEST_F(EsParserTeletextTest, generate_zero_duration_samples_if_no_text) {
   EXPECT_NE(nullptr, text_sample_.get());
   EXPECT_EQ(2, text_samples_.size());
   int64_t target_pts = 12000 + 45000;
-  for (auto const& sample :
-       text_samples_) {
+  for (auto const& sample : text_samples_) {
     EXPECT_EQ(0, sample->duration());
     EXPECT_EQ(target_pts, sample->start_time());
     target_pts += 45000;

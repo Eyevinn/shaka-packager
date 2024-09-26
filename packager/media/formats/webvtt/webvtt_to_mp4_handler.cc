@@ -188,7 +188,9 @@ Status WebVttToMp4Handler::OnTextSample(
 
   // Add the new text sample to the cache of samples that belong in the
   // current segment.
-  LOG(INFO) << "TextSample pts=" << sample->start_time() << " endTime=" << sample->EndTime() << " duration=" << sample->duration();
+  LOG(INFO) << "TextSample pts=" << sample->start_time()
+            << " endTime=" << sample->EndTime()
+            << " duration=" << sample->duration();
   current_segment_.push_back(std::move(stream_data->text_sample));
   return Status::OK;
 }
@@ -249,7 +251,6 @@ Status WebVttToMp4Handler::DispatchCurrentSegment(int64_t segment_start,
     RETURN_IF_ERROR(MergeDispatchSamples(section_start, section_end, active));
 
     section_start = section_end;
-
   }
 
   DCHECK(front == actions.end()) << "We should have processed all actions.";

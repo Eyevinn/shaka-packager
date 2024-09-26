@@ -87,7 +87,7 @@ struct TextFragmentStyle {
   std::string backgroundColor;
 };
 
-const int64_t ttx_cue_duration_placeholder = 10*90000; // 10s
+const int64_t ttx_cue_duration_placeholder = 10 * 90000;  // 10s
 
 /// Represents a recursive structure of styled blocks of text.  Only one of
 /// sub_fragments, body, image, or newline will be set.
@@ -123,10 +123,12 @@ enum class TextSampleRole {
   /// kCueWithoutEnd is cue with start time but unknown end time
   kCueWithoutEnd,
   /// kCueEnd has time to end a kCueWithoutEnd, if ongooing.
-  /// Can be sent multiple times with different times and then acts as heart beat.
+  /// Can be sent multiple times with different times and then acts as heart
+  /// beat.
   kCueEnd,
   /// kMediaHeartBeat conveys a PTS from another media pid. Use its start_time.
-  /// Will typically be shifted up in order to avoid premature segment generation.
+  /// Will typically be shifted up in order to avoid premature segment
+  /// generation.
   kMediaHeartBeat,
 };
 
@@ -139,11 +141,11 @@ class TextSample {
              const TextFragment& body);
 
   TextSample(const std::string& id,
-           int64_t start_time,
-           int64_t end_time,
-           const TextSettings& settings,
-           const TextFragment& body,
-           TextSampleRole role);
+             int64_t start_time,
+             int64_t end_time,
+             const TextSettings& settings,
+             const TextFragment& body,
+             TextSampleRole role);
 
   const std::string& id() const { return id_; }
   int64_t start_time() const { return start_time_; }
@@ -157,7 +159,6 @@ class TextSample {
   void set_sub_stream_index(int32_t idx) { sub_stream_index_ = idx; }
   bool is_empty() const { return body_.is_empty(); }
   TextSampleRole role() const { return role_; }
-
 
  private:
   // Allow the compiler generated copy constructor and assignment operator

@@ -92,8 +92,6 @@ TEST_F(TextChunkerTest, SegmentsStartAtFirstSample) {
   ASSERT_OK(Input(kInput)->FlushAllDownstreams());
 }
 
-
-
 // Verify that when a sample elapses a full segment, that it only appears
 // in the one segment.
 //
@@ -271,7 +269,6 @@ TEST_F(TextChunkerTest, OutputsEmptySegments) {
       GetTextSample(kNoId, kSampleBStart, kSampleBEnd, kNoPayload))));
   ASSERT_OK(Input(kInput)->FlushAllDownstreams());
 }
-
 
 // Verify that segments are outputted, including empty ones as will get
 // outputted if heart-beat samples with duration are received

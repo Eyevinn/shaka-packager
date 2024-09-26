@@ -19,7 +19,7 @@ namespace shaka {
 namespace media {
 namespace mp2t {
 
-const int64_t ttx_cue_duration_placeholder = 30*90000; // 30s
+const int64_t ttx_cue_duration_placeholder = 30 * 90000;  // 30s
 
 class EsParserTeletext : public EsParser {
  public:
@@ -52,12 +52,8 @@ class EsParserTeletext : public EsParser {
     RowColReplacementMap packet_26_replacements;
     int64_t pts;
 
-    void SetPTS(uint64_t new_pts) {
-      pts = new_pts;
-    }
+    void SetPTS(uint64_t new_pts) { pts = new_pts; }
   };
-
-
 
   bool ParseInternal(const uint8_t* data, const size_t size, const int64_t pts);
   bool ParseDataBlock(const int64_t pts,

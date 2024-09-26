@@ -25,5 +25,4 @@ ABSL_DECLARE_FLAG(int32_t, default_text_zero_bias_ms);
 ABSL_DECLARE_FLAG(int64_t, ts_text_trigger_shift);
 ABSL_DECLARE_FLAG(int64_t, start_segment_number);
 
-
 #endif  // APP_MUXER_FLAGS_H_

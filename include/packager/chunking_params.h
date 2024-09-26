@@ -41,7 +41,7 @@ struct ChunkingParams {
   // on the text pid. The scale is 90000 and the value should typically be
   // 1-2 seconds to avoid that premature chunk generation before true cue data
   // has arrived.
-  int64_t ts_text_trigger_shift = 180000 ;
+  int64_t ts_text_trigger_shift = 180000;
 };
 
 }  // namespace shaka

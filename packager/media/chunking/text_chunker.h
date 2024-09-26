@@ -23,8 +23,8 @@ class TextChunker : public MediaHandler {
   explicit TextChunker(double segment_duration_in_seconds,
                        int64_t start_segment_number);
   explicit TextChunker(double segment_duration_in_seconds,
-                     int64_t start_segment_number,
-                     int64_t end_segment_number);
+                       int64_t start_segment_number,
+                       int64_t end_segment_number);
 
  private:
   TextChunker(const TextChunker&) = delete;

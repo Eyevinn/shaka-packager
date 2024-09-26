@@ -212,7 +212,8 @@ bool EsParserTeletext::ParseInternal(const uint8_t* data,
 
     TextRow row;
     if (ParseDataBlock(pts, data_block, packet_nr, magazine, row)) {
-      LOG(INFO) << "pts=" << pts << " row=" << row.row_number << " text=" << row.fragment.body;
+      LOG(INFO) << "pts=" << pts << " row=" << row.row_number
+                << " text=" << row.fragment.body;
       rows.emplace_back(std::move(row));
     }
   }
@@ -224,13 +225,16 @@ bool EsParserTeletext::ParseInternal(const uint8_t* data,
   }
 
   auto page_state_itr = page_state_.find(index);
-  if (page_state_itr == page_state_.end()) { //TOBBE. index does not exist. Start new.
-    LOG(INFO) << "page_state start pts=" << last_pts_ << " nr_rows=" << rows.size();
+  if (page_state_itr ==
+      page_state_.end()) {  // TOBBE. index does not exist. Start new.
+    LOG(INFO) << "page_state start pts=" << last_pts_
+              << " nr_rows=" << rows.size();
     page_state_.emplace(index, TextBlock{std::move(rows), {}, last_pts_});
   } else {
     for (auto& row : rows) {
       auto& page_state_lines = page_state_itr->second.rows;
-      LOG(INFO) << "page_state adding row=" << row.row_number << " to pts=" << page_state_itr->second.pts;
+      LOG(INFO) << "page_state adding row=" << row.row_number
+                << " to pts=" << page_state_itr->second.pts;
       page_state_lines.emplace_back(std::move(row));
     }
     rows.clear();
@@ -244,10 +248,9 @@ bool EsParserTeletext::ParseDataBlock(const int64_t pts,
                                       const uint8_t packet_nr,
                                       const uint8_t magazine,
                                       TextRow& row) {
-  if (last_pts_ >= 0 && pts - last_pts_ > 5*90000) {
-    LOG(WARNING) << "Irregular sample generation due to big pts diff. pts=" <<
-      pts << " diff=" << pts - last_pts_;
-
+  if (last_pts_ >= 0 && pts - last_pts_ > 5 * 90000) {
+    LOG(WARNING) << "Irregular sample generation due to big pts diff. pts="
+                 << pts << " diff=" << pts - last_pts_;
   }
   if (packet_nr == 0) {
     BitReader reader(data_block, 32);
@@ -261,8 +264,8 @@ bool EsParserTeletext::ParseDataBlock(const int64_t pts,
     const uint8_t page_number = 10 * page_number_tens + page_number_units;
     const uint16_t index = magazine * 100 + page_number;
     if (pts != last_pts_) {
-      LOG(INFO) << "packet_nr=0, index=" << index << " last_pts_=" <<
-        last_pts_ << " pts=" << pts;
+      LOG(INFO) << "packet_nr=0, index=" << index << " last_pts_=" << last_pts_
+                << " pts=" << pts;
     }
     last_pts_ = pts;  // This should ideally be done for each index.
 
@@ -297,7 +300,8 @@ bool EsParserTeletext::ParseDataBlock(const int64_t pts,
       const auto old_pts = page_state_itr->second.pts;
       if (pts != old_pts) {
         page_state_itr->second.pts = pts;
-        LOG(INFO) << "reset PTS from " << old_pts << " to " << page_state_itr->second.pts;
+        LOG(INFO) << "reset PTS from " << old_pts << " to "
+                  << page_state_itr->second.pts;
       }
     }
   }
@@ -345,7 +349,7 @@ void EsParserTeletext::UpdateCharset() {
 // since the duration is not yet known. More importantly, the role of the
 // sample is set to kCueWithoutEnd.
 void EsParserTeletext::SendStartedCue(const uint16_t index) {
-auto page_state_itr = page_state_.find(index);
+  auto page_state_itr = page_state_.find(index);
 
   if (page_state_itr == page_state_.end()) {
     return;
@@ -357,7 +361,6 @@ auto page_state_itr = page_state_.find(index);
   }
 
   inside_sample_ = true;
-
 
   const auto& pending_rows = page_state_itr->second.rows;
   const auto pts_start = page_state_itr->second.pts;
@@ -378,10 +381,11 @@ auto page_state_itr = page_state_.find(index);
         "", pts_start, pts_end, text_settings, pending_rows[0].fragment,
         TextSampleRole::kCueWithoutEnd);
     text_sample->set_sub_stream_index(index);
-    //LOG(INFO) << "send 1 row pts=" << pts_start;
+    // LOG(INFO) << "send 1 row pts=" << pts_start;
     emit_sample_cb_(text_sample);
-    page_state_itr->second.rows.clear(); // Remove this row, but keep packet26 replacements
-    //LOG(INFO) << "erased page_state single-row index=" << index;
+    page_state_itr->second.rows
+        .clear();  // Remove this row, but keep packet26 replacements
+    // LOG(INFO) << "erased page_state single-row index=" << index;
     inside_sample_ = false;
     return;
   } else {
@@ -395,12 +399,11 @@ auto page_state_itr = page_state_.find(index);
       if (latest_row_nr != -1) {  // Not the first row
         if (row_nr != latest_row_nr + row_step) {
           // Send what has been collected since not adjacent
-          text_sample =
-              std::make_shared<TextSample>("", pts_start, pts_end, text_settings,
-                                           TextFragment({}, sub_fragments),
-                                             TextSampleRole::kCueWithoutEnd);
+          text_sample = std::make_shared<TextSample>(
+              "", pts_start, pts_end, text_settings,
+              TextFragment({}, sub_fragments), TextSampleRole::kCueWithoutEnd);
           text_sample->set_sub_stream_index(index);
-          //LOG(INFO) << "send non-adjacent pts=" << pts_start;;
+          // LOG(INFO) << "send non-adjacent pts=" << pts_start;;
           emit_sample_cb_(text_sample);
           new_sample = true;
         } else {
@@ -425,8 +428,8 @@ auto page_state_itr = page_state_.find(index);
   }
 
   text_sample = std::make_shared<TextSample>(
-      "", pts_start, pts_end, text_settings, TextFragment({},
-        sub_fragments), TextSampleRole::kCueWithoutEnd);
+      "", pts_start, pts_end, text_settings, TextFragment({}, sub_fragments),
+      TextSampleRole::kCueWithoutEnd);
 
   text_sample->set_sub_stream_index(index);
   LOG(INFO) << "send final cue pts=" << pts_start;
@@ -447,11 +450,11 @@ void EsParserTeletext::SendCueEnd(const uint16_t index, const int64_t pts_end) {
   }
 
   TextSettings text_settings;
-  auto end_sample = std::make_shared<TextSample>("", pts_end, pts_end, text_settings,
-                                                TextFragment({}, ""),
-                                                TextSampleRole::kCueEnd);
+  auto end_sample = std::make_shared<TextSample>(
+      "", pts_end, pts_end, text_settings, TextFragment({}, ""),
+      TextSampleRole::kCueEnd);
   end_sample->set_sub_stream_index(index);
-  LOG(INFO) << "for index=" << index <<" send cue end at pts=" << pts_end;
+  LOG(INFO) << "for index=" << index << " send cue end at pts=" << pts_end;
   emit_sample_cb_(end_sample);
   last_pts_ = pts_end;
   last_end_pts_ = pts_end;

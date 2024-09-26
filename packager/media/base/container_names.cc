@@ -832,7 +832,7 @@ static bool CheckMpeg2TransportStream(const uint8_t* buffer, int buffer_size) {
     int pid = ReadBits(&reader, 13);
     RCHECK(pid < 3 || pid > 15);
 
-    if (pid != 8191) { // More checks for non-stuffing packets
+    if (pid != 8191) {  // More checks for non-stuffing packets
       // Skip transport_scrambling_control.
       reader.SkipBits(2);
 

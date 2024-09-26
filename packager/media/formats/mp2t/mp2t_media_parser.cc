@@ -194,7 +194,6 @@ bool Mp2tMediaParser::Flush() {
 }
 
 bool Mp2tMediaParser::Parse(const uint8_t* buf, int size) {
-
   // Add the data to the parser state.
   ts_byte_queue_.Push(buf, size);
 
@@ -469,7 +468,8 @@ void Mp2tMediaParser::OnEmitTextSample(uint32_t pes_pid,
   if (new_sample->role() != TextSampleRole::kMediaHeartBeat) {
     // Remove kMediaHeartBeats from the end of the queue
     while (!pid_state->second->text_sample_queue_.empty()) {
-      if (pid_state->second->text_sample_queue_.back()->role() != TextSampleRole::kMediaHeartBeat) {
+      if (pid_state->second->text_sample_queue_.back()->role() !=
+          TextSampleRole::kMediaHeartBeat) {
         break;
       }
       pid_state->second->text_sample_queue_.pop_back();
@@ -479,7 +479,6 @@ void Mp2tMediaParser::OnEmitTextSample(uint32_t pes_pid,
 }
 
 bool Mp2tMediaParser::EmitRemainingSamples() {
-
   // No buffer should be sent until fully initialized.
   if (!is_initialized_)
     return true;
@@ -501,19 +500,21 @@ bool Mp2tMediaParser::EmitRemainingSamples() {
 }
 
 void Mp2tMediaParser::update_biggest_pts(int64_t pts) {
-  if (pts >= biggest_pts_+9000) { // 100ms larger than last biggest
+  if (pts >= biggest_pts_ + 9000) {  // 100ms larger than last biggest
     biggest_pts_ = pts;
     for (auto pid : text_pids_) {
       auto pid_state = pids_.find(pid);
       if (pid_state == pids_.end()) {
-        LOG(ERROR) << "PID State for new sample not found (text pid = " << pid << " )";
+        LOG(ERROR) << "PID State for new sample not found (text pid = " << pid
+                   << " )";
         continue;
       }
       TextSettings text_settings;
-      auto heartbeat = std::make_shared<TextSample>("", pts, pts, text_settings,
-                                                TextFragment({}, ""),
-                                                TextSampleRole::kMediaHeartBeat);
-      //LOG(WARNING) << "Media heartbeat generated = " << pid << " pts=" << pts;
+      auto heartbeat = std::make_shared<TextSample>(
+          "", pts, pts, text_settings, TextFragment({}, ""),
+          TextSampleRole::kMediaHeartBeat);
+      // LOG(WARNING) << "Media heartbeat generated = " << pid << " pts=" <<
+      // pts;
       OnEmitTextSample(uint32_t(pid), heartbeat);
     }
   }
