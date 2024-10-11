@@ -111,7 +111,7 @@ Status TextChunker::OnTextSample(std::shared_ptr<const TextSample> sample) {
     }
     case TextSampleRole::kCueEnd: {
       // LOG(INFO) << "PTS=" << sample_start << " cue end";
-      //  Convert any cues without end to full cues (but only once)
+      // Convert any cues without end to full cues (but only once)
       auto end_time = sample->EndTime();
       for (auto s : samples_without_end_) {
         int64_t cue_start = s->start_time();
@@ -121,8 +121,8 @@ Status TextChunker::OnTextSample(std::shared_ptr<const TextSample> sample) {
         auto nS =
             std::make_shared<TextSample>("", cue_start, end_time, s->settings(),
                                          s->body(), TextSampleRole::kCue);
-        // LOG(INFO) << "cue shortened. startTime=" << s->start_time()
-        //           << " endTime=" << end_time;
+        // LOG(INFO) << "cue shortened. startTime=" << s->start_time() << "
+        // endTime=" << end_time;
         samples_in_current_segment_.push_back(nS);
       }
       samples_without_end_.clear();
@@ -135,15 +135,16 @@ Status TextChunker::OnTextSample(std::shared_ptr<const TextSample> sample) {
       break;
     }
     default: {
-      LOG(ERROR) << "Unknown role encountered. pts=" << sample_start;
+      // LOG(ERROR) << "Unknown role encountered. pts=" << sample_start;
     }
   }
 
   if (role != TextSampleRole::kMediaHeartBeat) {
     if (sample_start < latest_media_heartbeat_time_) {
-      LOG(WARNING) << "Potentially bad text segment: text pts=" << sample_start
-                   << " before latest media pts="
-                   << latest_media_heartbeat_time_;
+      // LOG(WARNING) << "Potentially bad text segment: text pts=" <<
+      // sample_start
+      //            << " before latest media pts="
+      //            << latest_media_heartbeat_time_;
     }
   }
 
@@ -204,9 +205,11 @@ Status TextChunker::DispatchSegment(int64_t duration) {
   DCHECK_GT(duration, 0) << "Segment duration should always be positive";
 
   // Output all the samples that are part of the segment.
+  // LOG(INFO) << "DispatchSegment, start=" << segment_start_ << " end=" <<
+  // segment_start_ + duration;
   for (const auto& sample : samples_in_current_segment_) {
-    LOG(WARNING) << "DispatchTextSample, pts=" << sample->start_time()
-                 << " end=" << sample->EndTime();
+    // LOG(INFO) << "DispatchTextSample, pts=" << sample->start_time()
+    //       << " end=" << sample->EndTime();
     RETURN_IF_ERROR(DispatchTextSample(kStreamIndex, sample));
   }
 

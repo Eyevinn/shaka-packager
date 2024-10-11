@@ -207,8 +207,8 @@ bool EsParserTeletext::ParseInternal(const uint8_t* data,
 
     TextRow row;
     if (ParseDataBlock(pts, data_block, packet_nr, magazine, row)) {
-      LOG(INFO) << "pts=" << pts << " row=" << row.row_number
-                 << " text=\"" << row.fragment.body << "\"";
+      LOG(INFO) << "pts=" << pts << " row=" << row.row_number << " text=\""
+                << row.fragment.body << "\"";
       rows.emplace_back(std::move(row));
     }
   }
@@ -229,7 +229,7 @@ bool EsParserTeletext::ParseInternal(const uint8_t* data,
     }
     rows.clear();
   }
-  SendStartedCue(index);
+  SendCueStart(index);
   return true;
 }
 
@@ -257,7 +257,13 @@ bool EsParserTeletext::ParseDataBlock(const int64_t pts,
     page_number_ = page_number;
     magazine_ = magazine;
 
-    RCHECK(reader.SkipBits(40));
+    RCHECK(reader.SkipBits(8));
+    const uint8_t erase_code_s4 = ReadHamming(reader) >> 3;
+    // LOG(INFO) << " pts=" << pts << " erase page  " << int(erase_code_s4);
+    if (erase_code_s4 == 1) {
+      SendCueEnd(index, last_pts_);
+    }
+    RCHECK(reader.SkipBits(24));
     const uint8_t subcode_c11_c14 = ReadHamming(reader);
     const uint8_t charset_code = subcode_c11_c14 >> 1;
     if (charset_code != charset_code_) {
@@ -267,6 +273,7 @@ bool EsParserTeletext::ParseDataBlock(const int64_t pts,
 
     return false;
   } else if (packet_nr == 26) {
+    // LOG(INFO) << " pts=" << pts << " packet26";
     ParsePacket26(data_block);
     return false;
   } else if (packet_nr > 26) {
@@ -327,7 +334,7 @@ void EsParserTeletext::UpdateCharset() {
 // SendCueStart emits a text sample with body and ttx_cue_duration_placeholder
 // since the duration is not yet known. More importantly, the role of the
 // sample is set to kCueWithoutEnd.
-void EsParserTeletext::SendStartedCue(const uint16_t index) {
+void EsParserTeletext::SendCueStart(const uint16_t index) {
   auto page_state_itr = page_state_.find(index);
 
   if (page_state_itr == page_state_.end()) {
@@ -335,7 +342,7 @@ void EsParserTeletext::SendStartedCue(const uint16_t index) {
   }
 
   if (page_state_itr->second.rows.empty()) {
-    page_state_.erase(index);
+    // page_state_.erase(index);
     return;
   }
 
@@ -360,11 +367,9 @@ void EsParserTeletext::SendStartedCue(const uint16_t index) {
         "", pts_start, pts_end, text_settings, pending_rows[0].fragment,
         TextSampleRole::kCueWithoutEnd);
     text_sample->set_sub_stream_index(index);
-    // LOG(INFO) << "send 1 row pts=" << pts_start;
+    // LOG(INFO) << "emit 1 row pts=" << pts_start;
     emit_sample_cb_(text_sample);
-    page_state_itr->second.rows
-        .clear();  // Remove row, but keep pkt26 replacements
-    // LOG(INFO) << "erased page_state single-row index=" << index;
+    page_state_itr->second.rows.clear(); // clear rows, but keep packet26 page_state
     inside_sample_ = false;
     return;
   } else {
@@ -382,7 +387,7 @@ void EsParserTeletext::SendStartedCue(const uint16_t index) {
               "", pts_start, pts_end, text_settings,
               TextFragment({}, sub_fragments), TextSampleRole::kCueWithoutEnd);
           text_sample->set_sub_stream_index(index);
-          // LOG(INFO) << "send non-adjacent pts=" << pts_start;;
+          // LOG(INFO) << "emit non-adjacent pts=" << pts_start;;
           emit_sample_cb_(text_sample);
           new_sample = true;
         } else {
@@ -411,7 +416,7 @@ void EsParserTeletext::SendStartedCue(const uint16_t index) {
       TextSampleRole::kCueWithoutEnd);
 
   text_sample->set_sub_stream_index(index);
-  // LOG(INFO) << "send final cue pts=" << pts_start;
+  // LOG(INFO) << "emit final cue pts=" << pts_start;
   emit_sample_cb_(text_sample);
 
   page_state_itr->second.rows.clear();
@@ -420,6 +425,11 @@ void EsParserTeletext::SendStartedCue(const uint16_t index) {
 
 // SendCueEnd emits a text sample with role kCueEnd to signal no data/cue end.
 void EsParserTeletext::SendCueEnd(const uint16_t index, const int64_t pts_end) {
+  auto page_state_itr = page_state_.find(index);
+  if (page_state_itr != page_state_.end()) {
+    page_state_.erase(index);
+  }
+
   if (last_pts_ == -1) {
     last_pts_ = pts_end;
     return;
@@ -433,7 +443,7 @@ void EsParserTeletext::SendCueEnd(const uint16_t index, const int64_t pts_end) {
       "", pts_end, pts_end, text_settings, TextFragment({}, ""),
       TextSampleRole::kCueEnd);
   end_sample->set_sub_stream_index(index);
-  // LOG(INFO) << "for index=" << index << " send cue end at pts=" << pts_end;
+  // LOG(INFO) << "emit cue end at pts=" << pts_end;
   emit_sample_cb_(end_sample);
   last_pts_ = pts_end;
   last_end_pts_ = pts_end;
