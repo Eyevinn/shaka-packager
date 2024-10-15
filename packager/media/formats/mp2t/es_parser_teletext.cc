@@ -215,13 +215,13 @@ bool EsParserTeletext::ParseInternal(const uint8_t* data,
 
   const uint16_t index = magazine_ * 100 + page_number_;
   if (rows.empty()) {
-    SendCueEnd(index, last_pts_);
+    SendTextHeartbeat(index, pts);
     return true;
   }
 
   auto page_state_itr = page_state_.find(index);
   if (page_state_itr == page_state_.end()) {
-    LOG(INFO) << "index=" << index << " create TextBlock";
+    LOG(INFO) << "index=" << index << " create TextBlock pts=" << pts;
     page_state_.emplace(index, TextBlock{std::move(rows), {}, last_pts_});
   } else {
     for (auto& row : rows) {
@@ -252,9 +252,6 @@ bool EsParserTeletext::ParseDataBlock(const int64_t pts,
     const uint16_t index = magazine * 100 + page_number;
 
     last_pts_ = pts;  // This should ideally be done for each index.
-
-    SendCueEnd(index, pts); // This will end any current cue
-
     page_number_ = page_number;
     magazine_ = magazine;
 
@@ -266,16 +263,17 @@ bool EsParserTeletext::ParseDataBlock(const int64_t pts,
     }
 
     const uint8_t subcode_c11_c14 = ReadHamming(reader);
-    const uint8_t subcode_c11 = subcode_c11_c14 & 1;
+    const uint8_t subcode_c11_serial = subcode_c11_c14 & 1;
     const uint8_t charset_code = subcode_c11_c14 >> 1;
     LOG(INFO) << "index=" << index << " pts=" << pts << " erase page "
-  << int(erase_code_s4) << " charset=" << int(charset_code) << " serial=" << int(subcode_c11);
+  << int(erase_code_s4) << " charset=" << int(charset_code) << " serial=" << int(subcode_c11_serial);
     if (charset_code != charset_code_) {
       LOG(INFO) << "pts=" << pts << " new charset_code " <<  int(charset_code);
       charset_code_ = charset_code;
       UpdateCharset();
     }
-
+    page_state_.emplace(index, TextBlock{{}, {}, last_pts_});
+    LOG(INFO) << "index=" << index << " create TextBlock triggered by packet 0 pts=" << pts;
     return false;
   } else if (packet_nr == 26) {
     LOG(INFO) << "pts=" << pts << " packet26";
@@ -371,7 +369,7 @@ void EsParserTeletext::SendCueStart(const uint16_t index) {
     text_settings.text_alignment = pending_rows[0].alignment;
     text_sample = std::make_shared<TextSample>(
         "", pts_start, pts_end, text_settings, pending_rows[0].fragment,
-        TextSampleRole::kCueWithoutEnd);
+        TextSampleRole::kCueStart);
     text_sample->set_sub_stream_index(index);
     // LOG(INFO) << "emit 1 row pts=" << pts_start;
     emit_sample_cb_(text_sample);
@@ -391,7 +389,7 @@ void EsParserTeletext::SendCueStart(const uint16_t index) {
           // Send what has been collected since not adjacent
           text_sample = std::make_shared<TextSample>(
               "", pts_start, pts_end, text_settings,
-              TextFragment({}, sub_fragments), TextSampleRole::kCueWithoutEnd);
+              TextFragment({}, sub_fragments), TextSampleRole::kCueStart);
           text_sample->set_sub_stream_index(index);
           // LOG(INFO) << "emit non-adjacent pts=" << pts_start;;
           emit_sample_cb_(text_sample);
@@ -419,7 +417,7 @@ void EsParserTeletext::SendCueStart(const uint16_t index) {
 
   text_sample = std::make_shared<TextSample>(
       "", pts_start, pts_end, text_settings, TextFragment({}, sub_fragments),
-      TextSampleRole::kCueWithoutEnd);
+      TextSampleRole::kCueStart);
 
   text_sample->set_sub_stream_index(index);
   // LOG(INFO) << "emit final cue pts=" << pts_start;
@@ -433,6 +431,7 @@ void EsParserTeletext::SendCueStart(const uint16_t index) {
 void EsParserTeletext::SendCueEnd(const uint16_t index, const int64_t pts_end) {
   auto page_state_itr = page_state_.find(index);
   if (page_state_itr != page_state_.end()) {
+    LOG(INFO) << "index=" << index << " erasing state at pts=" << pts_end;
     page_state_.erase(index);
   }
 
@@ -444,6 +443,8 @@ void EsParserTeletext::SendCueEnd(const uint16_t index, const int64_t pts_end) {
     return;
   }
 
+  LOG(INFO) << "index=" << index << " sending cueEnd pts=" << pts_end;
+
   TextSettings text_settings;
   auto end_sample = std::make_shared<TextSample>(
       "", pts_end, pts_end, text_settings, TextFragment({}, ""),
@@ -454,6 +455,26 @@ void EsParserTeletext::SendCueEnd(const uint16_t index, const int64_t pts_end) {
   last_pts_ = pts_end;
   last_end_pts_ = pts_end;
   inside_sample_ = false;
+}
+
+// SendTextHeartbeat emits a text sample with role kTextHeart
+void EsParserTeletext::SendTextHeartbeat(const uint16_t index, const int64_t pts) {
+  if (last_pts_ == -1) {
+    last_pts_ = pts;
+    return;
+  }
+  if (pts == last_pts_) {
+    return;
+  }
+
+  TextSettings text_settings;
+  auto heartbeat_sample = std::make_shared<TextSample>(
+      "", pts, pts, text_settings, TextFragment({}, ""),
+      TextSampleRole::kTextHeartBeat);
+  heartbeat_sample->set_sub_stream_index(index);
+  // LOG(INFO) << "emit cue end at pts=" << pts_end;
+  emit_sample_cb_(heartbeat_sample);
+  last_pts_ = pts;
 }
 
 // BuildRow builds a row with alignment information.
@@ -482,11 +503,12 @@ EsParserTeletext::TextRow EsParserTeletext::BuildRow(const uint8_t* data_block,
   text_style.color = "white";
   text_style.backgroundColor = "black";
   // A typical 40 character line looks like:
-  // doubleHeight, [color] spaces, Start, Start, text, End End, spaces
+  // doubleHeight, [color] spaces, Start, Start, text, End, End, spaces
   for (size_t i = 0; i < kPayloadSize; ++i) {
     if (column_replacement_map) {
       const auto column_itr = column_replacement_map->find(i);
       if (column_itr != column_replacement_map->cend()) {
+        LOG(INFO) << "packet26 replacing col " << int(i) << " with " << column_itr->second;
         next_string.append(column_itr->second);
         continue;
       }
@@ -594,7 +616,7 @@ void EsParserTeletext::ParsePacket26(const uint8_t* data_block) {
   const uint16_t index = magazine_ * 100 + page_number_;
   auto page_state_itr = page_state_.find(index);
   if (page_state_itr == page_state_.end()) {
-    LOG(INFO) << "packet26 create TextBlock pts=" << last_pts_;
+    LOG(INFO) << "index=" << index << " create TextBlock triggered by packet 26 pts=" << last_pts_;
     page_state_.emplace(index, TextBlock{{}, {}, last_pts_});
   }
   auto& replacement_map = page_state_[index].packet_26_replacements;

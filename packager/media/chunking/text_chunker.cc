@@ -105,7 +105,7 @@ Status TextChunker::OnTextSample(std::shared_ptr<const TextSample> sample) {
       // sample->EndTime();
       break;
     }
-    case TextSampleRole::kCueWithoutEnd: {
+    case TextSampleRole::kCueStart: {
       // LOG(INFO) << "PTS=" << sample_start << " cue start wo end";
       break;
     }
@@ -128,6 +128,9 @@ Status TextChunker::OnTextSample(std::shared_ptr<const TextSample> sample) {
       samples_without_end_.clear();
       break;
     }
+    case TextSampleRole::kTextHeartBeat: {
+      break;
+    }
     case TextSampleRole::kMediaHeartBeat: {
       sample_start -= ts_text_trigger_shift_;
       latest_media_heartbeat_time_ = sample_start;
@@ -141,10 +144,8 @@ Status TextChunker::OnTextSample(std::shared_ptr<const TextSample> sample) {
 
   if (role != TextSampleRole::kMediaHeartBeat) {
     if (sample_start < latest_media_heartbeat_time_) {
-      // LOG(WARNING) << "Potentially bad text segment: text pts=" <<
-      // sample_start
-      //            << " before latest media pts="
-      //            << latest_media_heartbeat_time_;
+      LOG(WARNING) << "Potentially bad text segment: text pts=" <<
+      sample_start << " before latest media pts=" << latest_media_heartbeat_time_;
     }
   }
 
@@ -167,7 +168,7 @@ Status TextChunker::OnTextSample(std::shared_ptr<const TextSample> sample) {
   while (sample_start >= segment_start_ + segment_duration_) {
     int64_t segment_end = segment_start_ + segment_duration_;
     for (auto s : samples_without_end_) {
-      if (s->role() == TextSampleRole::kCueWithoutEnd) {
+      if (s->role() == TextSampleRole::kCueStart) {
         if (s->start_time() < segment_end) {
           // Make a new cue in current segment.
           auto cue_start = s->start_time();
@@ -189,7 +190,7 @@ Status TextChunker::OnTextSample(std::shared_ptr<const TextSample> sample) {
       samples_in_current_segment_.push_back(std::move(sample));
       break;
     }
-    case TextSampleRole::kCueWithoutEnd: {
+    case TextSampleRole::kCueStart: {
       samples_without_end_.push_back(std::move(sample));
       break;
     }

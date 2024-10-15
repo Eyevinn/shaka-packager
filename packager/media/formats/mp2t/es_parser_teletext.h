@@ -65,6 +65,8 @@ class EsParserTeletext : public EsParser {
   void UpdateNationalSubset(const uint8_t national_subset[13][3]);
   void SendCueStart(const uint16_t index);
   void SendCueEnd(const uint16_t index, const int64_t pts);
+  void SendTextHeartbeat(const uint16_t index, const int64_t pts);
+
 
   static void SetPacket26ReplacementString(
       RowColReplacementMap& replacement_map,
