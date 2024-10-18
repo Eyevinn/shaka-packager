@@ -144,8 +144,9 @@ Status TextChunker::OnTextSample(std::shared_ptr<const TextSample> sample) {
 
   if (role != TextSampleRole::kMediaHeartBeat) {
     if (sample_start < latest_media_heartbeat_time_) {
-      LOG(WARNING) << "Potentially bad text segment: text pts=" <<
-      sample_start << " before latest media pts=" << latest_media_heartbeat_time_;
+      LOG(WARNING) << "Potentially bad text segment: text pts=" << sample_start
+                   << " before latest media pts="
+                   << latest_media_heartbeat_time_;
     }
   }
 

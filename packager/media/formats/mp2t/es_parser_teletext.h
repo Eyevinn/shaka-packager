@@ -67,7 +67,6 @@ class EsParserTeletext : public EsParser {
   void SendCueEnd(const uint16_t index, const int64_t pts);
   void SendTextHeartBeat(const uint16_t index, const int64_t pts);
 
-
   static void SetPacket26ReplacementString(
       RowColReplacementMap& replacement_map,
       const uint8_t row,
