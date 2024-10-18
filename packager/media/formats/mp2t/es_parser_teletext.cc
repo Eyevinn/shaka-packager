@@ -215,7 +215,7 @@ bool EsParserTeletext::ParseInternal(const uint8_t* data,
 
   const uint16_t index = magazine_ * 100 + page_number_;
   if (rows.empty()) {
-    SendTextHeartbeat(index, pts);
+    SendTextHeartBeat(index, pts);
     return true;
   }
 
@@ -337,7 +337,7 @@ void EsParserTeletext::UpdateCharset() {
 
 // SendCueStart emits a text sample with body and ttx_cue_duration_placeholder
 // since the duration is not yet known. More importantly, the role of the
-// sample is set to kCueWithoutEnd.
+// sample is set to kCueStart.
 void EsParserTeletext::SendCueStart(const uint16_t index) {
   auto page_state_itr = page_state_.find(index);
 
@@ -458,7 +458,7 @@ void EsParserTeletext::SendCueEnd(const uint16_t index, const int64_t pts_end) {
 }
 
 // SendTextHeartbeat emits a text sample with role kTextHeart
-void EsParserTeletext::SendTextHeartbeat(const uint16_t index, const int64_t pts) {
+void EsParserTeletext::SendTextHeartBeat(const uint16_t index, const int64_t pts) {
   if (last_pts_ == -1) {
     last_pts_ = pts;
     return;
